@@ -1,9 +1,12 @@
+import logging
 from copy import deepcopy
 
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 
 from src.data.utils import k_fold_split, load_strong_cwola_data
+
+log = logging.getLogger(__name__)
 
 
 class DictDataset(Dataset):
@@ -31,26 +34,39 @@ class DijetModule(LightningDataModule):
         mjj_window: tuple | list | None = None,
         n_sig: int | None = None,
         n_bkg: int | None = None,
-        n_dop: int | None = None,
+        n_dope: int | None = None,
         n_csts: int | None = 0,
         num_folds: int = 5,
         test_fold: int = 0,
     ) -> None:
         super().__init__()
         self.loader_kwargs = loader_kwargs
+
+        # Load the full combined dataset
         dataset = load_strong_cwola_data(
             bkg_path,
             sig_path,
             mjj_window,
             n_sig,
             n_bkg,
-            n_dop,
+            n_dope,
             n_csts,
         )
+
+        # Calculate the positive weight to balance the classes
+        n_bkg = (dataset["cwola_labels"] == 0).sum()
+        n_sig = (dataset["cwola_labels"] == 1).sum()
+        self.pos_weight = n_bkg / n_sig  # This is called in the model on_fit_start
+
+        # Split the dataset into train, valid and test based on the test fold intex
         train_set, valid_set, test_set = k_fold_split(dataset, num_folds, test_fold)
         self.train_set = DictDataset(train_set)
         self.valid_set = DictDataset(valid_set)
         self.test_set = DictDataset(test_set)
+
+        log.info(f"Train set size: {len(self.train_set)}")
+        log.info(f"Valid set size: {len(self.valid_set)}")
+        log.info(f"Test set size: {len(self.test_set)}")
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_set, **self.loader_kwargs, shuffle=True)

@@ -5,12 +5,12 @@ sig_path: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/sig_clustered_pythi
 mjj_window: [3300, 3700]
 n_sig: 90_000
 n_bkg: 1000_000
-n_dop: 10_000
+n_dope: 0
 n_csts: 64
 num_folds: 5
 test_fold: 0
 loader_kwargs:
   pin_memory: true
-  batch_size: 256
+  batch_size: 1024
   num_workers: 6
   drop_last: True

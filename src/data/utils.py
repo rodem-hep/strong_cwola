@@ -51,7 +51,12 @@ def load_dijet_file(
     n_csts: int | None = None,
     from_bottom: bool = False,
 ) -> dict:
-    """Load in information from a diject file."""
+    """Load in information from a dijet file."""
+    if from_bottom and n_events is None:
+        n_events = 0
+    elif from_bottom and n_events == 0:
+        from_bottom = False  # Don't read anything
+
     data = {}
     with h5py.File(file_path, "r") as f:
         for key in f:
@@ -73,15 +78,15 @@ def load_strong_cwola_data(
     mjj_window: tuple | list | None = None,
     n_sig: int | None = None,
     n_bkg: int | None = None,
-    n_dop: int | None = None,
+    n_dope: int | None = None,
     n_csts: int | None = 0,
 ) -> tuple:
-    bkg_data = load_dijet_file(bkg_path, mjj_window, n_bkg, n_csts)
-    dop_data = load_dijet_file(sig_path, mjj_window, n_dop, n_csts, from_bottom=True)
+    bkg_data = load_dijet_file(bkg_path, mjj_window, n_bkg - n_dope, n_csts)
     sig_data = load_dijet_file(sig_path, mjj_window, n_sig, n_csts)
+    dope_data = load_dijet_file(sig_path, mjj_window, n_dope, n_csts, from_bottom=True)
     bkg_data["cwola_labels"] = np.zeros_like(bkg_data["labels"])
-    dop_data["cwola_labels"] = np.zeros_like(dop_data["labels"])
+    dope_data["cwola_labels"] = np.zeros_like(dope_data["labels"])
     sig_data["cwola_labels"] = np.ones_like(sig_data["labels"])
     return {
-        k: np.concat([bkg_data[k], dop_data[k], sig_data[k]], axis=0) for k in bkg_data
+        k: np.concat([bkg_data[k], dope_data[k], sig_data[k]], axis=0) for k in bkg_data
     }

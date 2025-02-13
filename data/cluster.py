@@ -58,24 +58,18 @@ def parse_args() -> argparse.Namespace:
         "--n_csts",
         type=int,
         default=200,
-        help="Maximum number of constituents",
+        help="Maximum number of constituents per jet",
     )
     parser.add_argument(
         "--input_file",
         type=str,
-        default="event_anomalydetection_v2.h5",
+        default="pythia.h5",
         help="Path to the data file",
     )
     parser.add_argument(
         "--data_dir",
         type=Path,
-        default="/srv/beegfs/scratch/groups/rodem/LHCO/",
-        help="Path to the output file",
-    )
-    parser.add_argument(
-        "--output_file",
-        type=str,
-        default="lhco_reclustered.h5",
+        default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/",
         help="Path to the output file",
     )
 
@@ -85,23 +79,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # Get the expected shapes of the input data
-    in_path = args.data_dir / args.input_file
-
     # Load all data for the clustering - trim to the number of events and csts
+    in_path = args.data_dir / args.input_file
     log.info(f"Loading data from {in_path}")
-    csts = pd.read_hdf(in_path, stop=args.n_events).to_numpy().astype(np.float32)
-    n_events = csts.shape[0]
-    has_label = csts.shape[-1] % 3 == 1  # Trim off the last col if the label is present
-    csts = csts[:, :-1] if has_label else csts
-    labels = csts[:, -1] > 0 if has_label else np.zeros_like(csts[:, 0], dtype=bool)
-    csts = csts.reshape(n_events, -1, 3)  # Unflatten the data
-    log.info(f"Loaded {n_events} events with {csts.shape[1]} constituents each")
-
-    log.info(f"Sorting the constituents by pt and selecting leading {args.n_csts}")
-    order = np.argsort(-csts[..., 0], axis=-1)
-    csts = np.take_along_axis(csts, order[..., None], axis=1)
-    csts = csts[:, : args.n_csts]  # Trim to the maximum number of constituents
+    with h5py.File(in_path, "r") as file:
+        csts = file["csts"][: args.n_events]  # Must cluster with all constituents
+        labels = file["labels"][: args.n_events]
 
     log.info(f"Clustering each event using anti-kt with R={args.R}")
     jetdef = fastjet.JetDefinition(fastjet.antikt_algorithm, args.R)
@@ -164,7 +147,7 @@ def main() -> None:
     convert_to_relative(jet1_cnsts, jet1_obs)
     mjj = ((jets[:, -1] + jets[:, -2]).m).to_numpy()[:, None]  # N x 1
 
-    out_path = args.data_dir / args.output_file
+    out_path = args.data_dir / ("clustered_" + args.output_file)
     log.info(f"Saving to {out_path}")
     with h5py.File(out_path, "w") as file:
         dtype = np.dtype("float32")
