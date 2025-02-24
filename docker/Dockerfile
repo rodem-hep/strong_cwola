@@ -2,7 +2,7 @@
 FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 # Make sure the location is set!
-WORKDIR /jetssl-lite
+WORKDIR /LowStrongCwola
 
 # Local and environment variables
 ENV LANG C.UTF-8
