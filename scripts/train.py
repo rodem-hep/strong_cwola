@@ -1,7 +1,9 @@
 """Basic training script."""
 
 import logging
+from pathlib import Path
 
+import h5py
 import hydra
 import lightning.pytorch as pl
 import rootutils
@@ -17,7 +19,7 @@ from mltools.mltools.hydra_utils import (
     reload_original_config,
     save_config,
 )
-from mltools.mltools.lightning_utils import save_predictions
+from mltools.mltools.torch_utils import to_np
 from mltools.mltools.utils import save_declaration
 
 log = logging.getLogger(__name__)
@@ -95,7 +97,26 @@ def main(cfg: DictConfig) -> None:
         if not ckpt_path:
             log.warning("Best ckpt not found! Using current weights for testing...")
             ckpt_path = None
-        save_predictions(model, datamodule, trainer, cfg.full_path, ckpt_path)
+
+        log.info("Running inference on test set")
+        outputs = trainer.predict(
+            model=model, datamodule=datamodule, ckpt_path=ckpt_path
+        )
+
+        log.info("Looping over the test sets")
+        for i, output in enumerate(outputs):
+            log.info("Combining predictions across dataset")
+            keys = list(output[0].keys())
+            score_dict = {k: T.vstack([o[k] for o in outputs]) for k in keys}
+            score_dict = to_np(score_dict)
+
+            output_path = Path(cfg.full_path / "outputs" / f"test_set_{i}.h5")
+
+            log.info(f"Saving outputs to {output_path}")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with h5py.File(output_path, mode="w") as file:
+                for k in keys:
+                    file.create_dataset(k, data=score_dict[k])
 
 
 if __name__ == "__main__":

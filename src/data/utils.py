@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -29,6 +30,11 @@ def k_fold_split(dataset: dict, num_folds: int, test_fold: int) -> tuple:
     valid = {k: v[in_val] for k, v in dataset.items()}
     train = {k: v[in_train] for k, v in dataset.items()}
 
+    # Add to each dict whether the element is in the train=0, val=1, test=2 fold
+    train["fold"] = np.full_like(train["labels"], 0)
+    valid["fold"] = np.full_like(valid["labels"], 1)
+    test["fold"] = np.full_like(test["labels"], 2)
+
     return train, valid, test
 
 
@@ -45,7 +51,7 @@ def get_mass_mask(x: np.ndarray, windows: tuple | None) -> np.ndarray:
 
 
 def load_dijet_file(
-    file_path: str,
+    file_path: Path,
     mjj_window: tuple | list | None = None,
     n_events: int | None = None,
     n_csts: int | None = None,
@@ -73,8 +79,8 @@ def load_dijet_file(
 
 
 def load_strong_cwola_data(
-    bkg_path: str,
-    sig_path: str,
+    bkg_path: Path,
+    sig_path: Path,
     mjj_window: tuple | list | None = None,
     n_sig: int | None = None,
     n_bkg: int | None = None,
@@ -88,5 +94,5 @@ def load_strong_cwola_data(
     dope_data["cwola_labels"] = np.zeros_like(dope_data["labels"])
     sig_data["cwola_labels"] = np.ones_like(sig_data["labels"])
     return {
-        k: np.concat([bkg_data[k], dope_data[k], sig_data[k]], axis=0) for k in bkg_data
+        k: np.concat([bkg_data[k], sig_data[k], dope_data[k]], axis=0) for k in bkg_data
     }

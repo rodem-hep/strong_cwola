@@ -1,0 +1,15 @@
+data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
+container: /home/users/l/leighm/scratch/images/jetssl-lite_master.sif
+project_name: lowstrongcwola
+
+raw_files:
+  pythia: events_anomalydetection_v2.h5
+  herwig: events_LHCO2020_BlackBox2.h5
+
+num_folds: 5
+num_seeds: 5
+dope:
+  - 0
+  - 1000
+  - 3000
+

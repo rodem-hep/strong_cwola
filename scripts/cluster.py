@@ -6,7 +6,6 @@ import awkward as ak
 import fastjet
 import h5py
 import numpy as np
-import pandas as pd
 import rootutils
 import vector
 
@@ -26,10 +25,14 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
 
-def none_or_int(value: str) -> int | None:
-    if value.lower() == "none":
+def none_or_int(x: str) -> int | None:
+    if x.lower() == "none":
         return None
-    return int(value)
+    return int(x)
+
+
+def str_to_bool(x: str) -> bool:
+    return x.lower() in {"t", "true", "y", "yes", "1"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,6 +70,12 @@ def parse_args() -> argparse.Namespace:
         help="Path to the data file",
     )
     parser.add_argument(
+        "--do_subclustering",
+        type=str_to_bool,
+        default=True,
+        help="If set, perform subclustering and calculate the tau variables",
+    )
+    parser.add_argument(
         "--data_dir",
         type=Path,
         default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/",
@@ -92,63 +101,67 @@ def main() -> None:
 
     # We are only interested in the leading two jets per event
     log.info("Extracting the leading two jets")
-    jets = clusters.inclusive_jets()[:, -2:]
+    jets = clusters.inclusive_jets()[:, -2:]  # Output is increasing in PT
     csts = clusters.constituents()[:, -2:]
 
-    # Subclustering will fail if there are less consituents than numjets
-    # To prevent this we pad each jet with up to 3 zero-energy constituents
-    # The corresponding clusters will be dropped later
-    zero_cst = ak.zip({"pt": 0, "eta": 0, "phi": 0, "mass": 0}, with_name="Momentum4D")
-    x = ak.pad_none(csts, 3, axis=2)
-    x = ak.fill_none(x, zero_cst)
+    # The actual data from the jets we want to save
+    jet_data = [jets.pt, jets.eta, jets.phi, jets.m]
 
-    log.info("Subclustering the leading jets with GenKT")
-    subjetdef = fastjet.JetDefinition(fastjet.genkt_algorithm, 1.0, 1.0)
-    subjets = fastjet.ClusterSequence(x, subjetdef)
+    # Perform subclustering if requested
+    if args.do_subclustering:
+        # Subclustering will fail if there are less consituents than numjets
+        # To prevent this we pad each jet with up to 3 zero-energy constituents
+        # The corresponding clusters will be dropped later
+        zero_cst = ak.zip(
+            {"pt": 0, "eta": 0, "phi": 0, "mass": 0}, with_name="Momentum4D"
+        )
+        x = ak.pad_none(csts, 3, axis=2)
+        x = ak.fill_none(x, zero_cst)
 
-    log.info("Subclustering using njet = 1...")
-    subjets1 = subjets.exclusive_jets(n_jets=1)
-    log.info("Subclustering using njet = 2...")
-    subjets2 = subjets.exclusive_jets(n_jets=2)
-    log.info("Subclustering using njet = 3...")
-    subjets3 = subjets.exclusive_jets(n_jets=3)
+        log.info("Subclustering the leading jets with GenKT")
+        subjetdef = fastjet.JetDefinition(fastjet.genkt_algorithm, 1.0, 1.0)
+        subjets = fastjet.ClusterSequence(x, subjetdef)
 
-    # Drop the jets that have 0 energy - created by the padding
-    subjets2 = make_ragged(subjets2, subjets2.pt > 0, axis=2)
-    subjets3 = make_ragged(subjets3, subjets3.pt > 0, axis=2)
+        log.info("Subclustering using njet = 1...")
+        subjets1 = subjets.exclusive_jets(n_jets=1)
+        log.info("Subclustering using njet = 2...")
+        subjets2 = subjets.exclusive_jets(n_jets=2)
+        log.info("Subclustering using njet = 3...")
+        subjets3 = subjets.exclusive_jets(n_jets=3)
 
-    # Calculate the tau variables
-    log.info("Calculating tau1...")
-    tau1 = n_subjettiness(subjets1, csts, args.R)
-    log.info("Calculating tau2...")
-    tau2 = n_subjettiness(subjets2, csts, args.R)
-    log.info("Calculating tau3...")
-    tau3 = n_subjettiness(subjets3, csts, args.R)
+        # Drop the jets that have 0 energy - created by the padding
+        subjets2 = make_ragged(subjets2, subjets2.pt > 0, axis=2)
+        subjets3 = make_ragged(subjets3, subjets3.pt > 0, axis=2)
+
+        # Calculate the tau variables
+        log.info("Calculating tau1...")
+        tau1 = n_subjettiness(subjets1, csts, args.R)
+        log.info("Calculating tau2...")
+        tau2 = n_subjettiness(subjets2, csts, args.R)
+        log.info("Calculating tau3...")
+        tau3 = n_subjettiness(subjets3, csts, args.R)
+        jet_data += [tau1, tau2, tau3]  # Make sure it is saved
 
     log.info("Combining the jet observables")
-    jet_obs = ak.concatenate(
-        [
-            jets.pt[..., None],
-            jets.eta[..., None],
-            jets.phi[..., None],
-            jets.m[..., None],
-            tau1[..., None],
-            tau2[..., None],
-            tau3[..., None],
-        ],
-        axis=-1,
-    )
+    jet_obs = ak.concatenate([j[..., None] for j in jet_data], axis=-1)
     jet_obs = jet_obs.to_numpy()
-    jet1_obs = jet_obs[:, -1]
+    jet1_obs = jet_obs[:, -1]  # Output is increasing in PT -> last jet is leading
     jet2_obs = jet_obs[:, -2]
+
+    log.info("Converting the constituent observables to relative coordinates")
     jet1_cnsts = make_padded(csts[:, -1], args.n_csts)[..., :3]  # Massless
     jet2_cnsts = make_padded(csts[:, -2], args.n_csts)[..., :3]
-    convert_to_relative(jet2_cnsts, jet2_obs)
     convert_to_relative(jet1_cnsts, jet1_obs)
+    convert_to_relative(jet2_cnsts, jet2_obs)
+
+    log.info("Calculating the invariant mass of the leading two jets")
     mjj = ((jets[:, -1] + jets[:, -2]).m).to_numpy()[:, None]  # N x 1
 
-    out_path = args.data_dir / ("clustered_" + args.output_file)
-    log.info(f"Saving to {out_path}")
+    log.info("Creating an event idx variable")
+    event_ids = np.arange(jet1_obs.shape[0], dtype=np.int32)[:, None]  # N x 1
+
+    out_path = args.data_dir / ("clustered_" + args.input_file)
+    log.info(f"Saving all data to {out_path}")
     with h5py.File(out_path, "w") as file:
         dtype = np.dtype("float32")
         file.create_dataset("jets1", data=jet1_obs, dtype=dtype)
@@ -157,6 +170,7 @@ def main() -> None:
         file.create_dataset("csts2", data=jet2_cnsts, dtype=dtype)
         file.create_dataset("mjj", data=mjj, dtype=dtype)
         file.create_dataset("labels", data=labels, dtype=bool)
+        file.create_dataset("event_ids", data=event_ids, dtype=np.int32)
 
 
 if __name__ == "__main__":

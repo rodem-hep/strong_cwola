@@ -1,3 +1,4 @@
+import logging
 import math
 
 import awkward as ak
@@ -5,6 +6,9 @@ import fastjet
 import numpy as np
 from vector import MomentumObject4D
 from vector.backends.awkward import MomentumArray4D
+
+log = logging.getLogger(__name__)
+
 
 
 def signed_angle_diff(angle1: float, angle2: float = 0) -> float:

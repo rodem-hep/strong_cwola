@@ -5,7 +5,7 @@ defaults:
 
 # Information about which model to load and export
 output_dir: /srv/beegfs/scratch/groups/rodem/
-project_name: jetssl-lite
+project_name: lowstrongcwola
 network_name: setme
 
 # The path to the checkpoint. Typically best.ckpt or last.ckpt

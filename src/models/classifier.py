@@ -132,9 +132,14 @@ class Classifier(LightningModule):
     def predict_step(self, data: dict) -> None:
         """Get the outputs and return all variables needed for saving."""
         outputs = self.forward(data)
-        cwola_labels = data["cwola_labels"].view(-1, 1)
-        labels = data["labels"].view(-1, 1)
-        return {"outputs": outputs, "cwola_labels": cwola_labels, "labels": labels}
+        return {
+            "outputs": outputs,
+            "target": data["cwola_labels"].view(-1, 1),
+            "weight": data["weights"],
+            "labels": data["labels"].view(-1, 1),
+            "event_ids": data["event_ids"],
+            "mjj": data["mjj"],
+        }
 
     def configure_optimizers(self) -> dict:
         params = filter(lambda p: p.requires_grad, self.parameters())

@@ -1,7 +1,9 @@
 _target_: src.data.dijet.DijetModule
 
-bkg_path: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/bkg_clustered_pythia.h5
-sig_path: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/sig_clustered_pythia.h5
+data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
+sig_file: clustered_pythia_sig.h5
+bkg_file: clustered_pythia_bkg.h5
+extra_test_file: clustered_herwig.h5
 mjj_window: [3300, 3700]
 n_sig: 90_000
 n_bkg: 1000_000
