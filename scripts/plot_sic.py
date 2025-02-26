@@ -79,7 +79,7 @@ def main() -> None:
     ]
 
     # colours - based on n_dope
-    colours = {0: "k", 500: "g", 1000: "r", 3000: "b"}
+    colours = {0: "k", 100: "m", 500: "g", 1000: "r", 3000: "b"}
     linestyles = {"pythia": "-", "herwig": "--"}
 
     # Plot the SIC

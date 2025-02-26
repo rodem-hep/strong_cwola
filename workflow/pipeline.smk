@@ -47,7 +47,7 @@ rule plot_sic:
             file=["pythia", "herwig"],
         ),
     output:
-        data_dir / f"{project_name}/sic.png",
+        data_dir / "{project_name}/sic.png",
     params:
         data_dir = data_dir / f"{project_name}",
     shell:
