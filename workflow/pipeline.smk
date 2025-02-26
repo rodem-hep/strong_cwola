@@ -47,14 +47,11 @@ rule plot_sic:
             file=["pythia", "herwig"],
         ),
     output:
-        data_dir / "{project_name}/sic.png",
+        data_dir / f"{project_name}/sic.png",
     params:
         data_dir = data_dir / f"{project_name}",
     shell:
-        """
-        python scripts/plot_sic.py
-        --data_dir={params.data_dir}
-        """
+        "python scripts/plot_sic.py --data_dir={params.data_dir}"
 
 
 rule combine_folds:

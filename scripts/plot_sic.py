@@ -68,7 +68,7 @@ def main() -> None:
     ]
 
     log.info("Calculating the SIC for pythia samples")
-    x_space = np.linspace(0.1, 1, 100)
+    x_space = np.linspace(0.7, 1, 100)
     test_sics = [
         get_sic(
             d["labels"][d["is_pythia"] == 1],
@@ -78,13 +78,17 @@ def main() -> None:
         for d in dataframes
     ]
 
+    # colours - based on n_dope
+    colours = {0: "k", 500: "g", 1000: "r", 3000: "b"}
+    linestyles = {"pythia": "-", "herwig": "--"}
+
     # Plot the SIC
     log.info("Plotting the SIC")
     fig, axis = plt.subplots(1, 1, figsize=(8, 6))
     for i, folder in enumerate(folders):
         gen, dope, _, seed, _ = folder.name.split("_")
-        color = "b" if gen == "pythia" else "g"
-        linestyle = "--" if dope == "1000" else "-"
+        color = colours[int(dope)]
+        linestyle = linestyles[gen]
         label = f"{gen} {dope}" if seed == "0" else None
         axis.plot(x_space, test_sics[i], color, linestyle=linestyle, label=label)
     axis.legend()
