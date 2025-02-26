@@ -11,6 +11,7 @@ slurmscripts/
 user**/**
 **user**
 *.snakemake
+*.triton
 *.pytest
 .config/
 .nv/
