@@ -7,6 +7,7 @@ from lightning import LightningModule
 from mltools.mltools.loss import sigmoid_focal_loss
 from mltools.mltools.mlp import MLP
 from mltools.mltools.modules import IterativeNormLayer
+from mltools.mltools.torch_utils import to_device
 from mltools.mltools.transformers import ClassAttentionPooling, Transformer
 from src.models.utils import calculate_signal_efficiency
 
@@ -67,19 +68,19 @@ class Classifier(LightningModule):
             dtype=T.float32,
         )
 
-    def forward(self, data: dict) -> T.Tensor:
+    def forward(self, batch: dict) -> T.Tensor:
         """Pass through the network."""
-        csts1 = data["csts1"]
-        csts2 = data["csts2"]
-        jets1 = data["jets1"]
-        jets2 = data["jets2"]
-        mjj = data["mjj"]
+        csts1 = batch["csts1"]
+        csts2 = batch["csts2"]
+        jets1 = batch["jets1"]
+        jets2 = batch["jets2"]
+        mjj = batch["mjj"]
 
         # Concatenate the two jets - one monolithic input for one monolithic model
         csts1 = F.pad(csts1, (0, 1), value=0)  # Pad the last dimension with a njet flag
         csts2 = F.pad(csts2, (0, 1), value=1)
         csts = T.cat([csts1, csts2], dim=1)  # Batch x N x D
-        hlv = T.cat([jets1, jets2, mjj], dim=1) * 0  # Batch x D
+        hlv = T.cat([jets1, jets2, mjj], dim=1)  # Batch x D
         mask = csts[..., 0] > 0
         csts = self.cst_norm(csts, mask)  # Normalise
         hlv = self.ctxt_norm(hlv)
@@ -89,9 +90,9 @@ class Classifier(LightningModule):
         mask = self.encoder.get_combined_mask(mask)  # Might gain registers
         return self.ca(x, mask=mask)  # Class attention
 
-    def _shared_step(self, data: dict, flag: str) -> T.Tensor:
-        outputs = self.forward(data)
-        targets = data["cwola_labels"]
+    def _shared_step(self, batch: dict, flag: str) -> T.Tensor:
+        outputs = self.forward(batch)
+        targets = batch["cwola_labels"]
         loss = sigmoid_focal_loss(
             outputs.squeeze(),
             targets,
@@ -101,16 +102,16 @@ class Classifier(LightningModule):
 
         if flag == "valid":
             self.val_outs.append(outputs.squeeze())
-            self.val_true_labels.append(data["labels"])
-            self.val_cwola_labels.append(data["cwola_labels"])
+            self.val_true_labels.append(batch["labels"])
+            self.val_cwola_labels.append(batch["cwola_labels"])
 
         return loss
 
-    def training_step(self, data: dict) -> T.Tensor:
-        return self._shared_step(data, "train")
+    def training_step(self, batch: dict) -> T.Tensor:
+        return self._shared_step(batch, "train")
 
-    def validation_step(self, data: dict) -> T.Tensor:
-        return self._shared_step(data, "valid")
+    def validation_step(self, batch: dict) -> T.Tensor:
+        return self._shared_step(batch, "valid")
 
     def on_validation_epoch_end(self):
         # Flatten the lists
@@ -129,17 +130,24 @@ class Classifier(LightningModule):
         self.val_true_labels = []
         self.val_cwola_labels = []
 
-    def predict_step(self, data: dict) -> None:
+    def predict_step(
+        self,
+        batch: dict,
+        batch_idx: int = 0,
+        dataloader_idx: int = 0,
+    ) -> dict:
         """Get the outputs and return all variables needed for saving."""
-        outputs = self.forward(data)
-        return {
+        outputs = self.forward(batch)
+        outdict = {
             "outputs": outputs,
-            "target": data["cwola_labels"].view(-1, 1),
-            "weight": data["weights"],
-            "labels": data["labels"].view(-1, 1),
-            "event_ids": data["event_ids"],
-            "mjj": data["mjj"],
+            "target": batch["cwola_labels"].view(-1, 1),
+            "weight": T.ones_like(outputs),
+            "labels": batch["labels"].view(-1, 1),
+            "event_ids": batch["event_ids"],
+            "mjj": batch["mjj"],
+            "is_pythia": batch["is_pythia"].view(-1, 1),
         }
+        return to_device(outdict, "cpu")  # Convert now or we risk running out of VRAM!
 
     def configure_optimizers(self) -> dict:
         params = filter(lambda p: p.requires_grad, self.parameters())

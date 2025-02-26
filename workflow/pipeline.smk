@@ -25,128 +25,135 @@ wildcard_constraints:
 
 # Important paths become Paths
 data_dir = Path(config["data_dir"])
+project_name = config["project_name"]
 folds = range(config["num_folds"])
 seeds = range(config["num_seeds"])
 
+# Generate the gen_dope combinations (Herwig has no dope)
+gen_dope = [f"pythia_{dope}" for dope in config["dope"]] + ["herwig_0"]
+
 ########################################
-
-
-# rule all:
-#     input:
-#         pythia_files=expand(
-#             data_dir
-#             / config["project_name"]
-#             / "pythia_{dope}_fold_{fold}_seed_{seed}",
-#             dope=config["dope"],
-#             fold=folds,
-#             seed=seeds,
-#         ),
-#         herwig_files=expand(
-#             data_dir / config["project_name"] / "herwig_fold_{fold}_seed_{seed}",
-#             fold=folds,
-#             seed=seeds,
-#         ),
-
-
-# rule train:
-#     output:
-#         data_dir / config["project_name"] / "{gen_dope}_fold_{fold}_seed_{seed}" /
-#     input:
-#         sig_file=data_dir / "clustered_pythia_sig.h5",
-#         bkg_file=lambda w: data_dir
-#         / (
-#             "clustered_herwig.h5"
-#             if w.gen_dope == "herwig"
-#             else "clustered_pythia_bkg.h5"
-#         ),
-#     params:
-#         output_dir=data_dir,
-#         project_name=config["project_name"],
-#         n_sig=90_000,
-#         n_bkg=1000_000,
-#         n_dope=lambda w: 0 if w.gen_dope == "herwig" else int(w.gen_dope.split("_")[1]),
-#         seed=lambda w: w.seed,
-#         test_fold=lambda w: w.fold,
-#         num_folds=config["num_folds"],
-#         model_name=lambda w: f"{w.gen_dope}_fold_{w.fold}_seed_{w.seed}",
-#         extra_test=lambda w: (
-#             f"clustered_pythia_bkg.h5"
-#             if w.gen_dope == "herwig"
-#             else "clustered_herwig.h5"
-#         ),
-#     shell:
-#         """
-#         python scripts/train.py \
-#         model_name={params.model_name} \
-#         output_dir={params.output_dir} \
-#         project_name={params.project_name} \
-#         seed={params.seed} \
-#         datamodule.n_sig={params.n_sig} \
-#         datamodule.n_bkg={params.n_bkg} \
-#         datamodule.n_dope={params.n_dope} \
-#         datamodule.test_fold={params.test_fold} \
-#         datamodule.num_folds={params.num_folds} \
-#         datamodule.extra_test={params.extra_test} \
-#         """
 
 rule all:
     input:
-        data_dir / "clustered_pythia_sig.h5",
-        data_dir / "clustered_pythia_bkg.h5",
-        data_dir / "clustered_herwig.h5",
+        data_dir / f"{project_name}/sic.png",
 
-
-rule split_by_labels:
-    output:
-        data_dir / "clustered_pythia_sig.h5",
-        data_dir / "clustered_pythia_bkg.h5",
+rule plot_sic:
     input:
-        data_dir / "clustered_pythia.h5",
+        expand(
+            data_dir / "{{project_name}}/{gen_dope}_seed_{seed}_combined/{file}.h5",
+            gen_dope=gen_dope,
+            seed=seeds,
+            file=["pythia", "herwig"],
+        ),
+    output:
+        data_dir / "{project_name}/sic.png",
     params:
-        data_dir=data_dir,
-    resources:
-        mem_mb=20_000,
+        data_dir = data_dir / f"{project_name}",
     shell:
         """
-        python scripts/split_by_labels.py \
-        --input_file=clustered_pythia.h5 \
-        --data_dir={params.data_dir} \
+        python scripts/plot_sic.py
+        --data_dir={params.data_dir}
         """
 
 
-rule cluster:
-    output:
-        data_dir / "clustered_{gen}.h5",
+rule combine_folds:
+    """Combine the test sets from each fold into a single file."""
     input:
-        data_dir / "{gen}.h5",
-    params:
-        data_dir=data_dir,
-    resources:
-        mem_mb=128_000,
-        slurm_partition="public-bigmem",
-    shell:
-        """
-        python scripts/cluster.py \
-        --input_file={wildcards.gen}.h5 \
-        --data_dir={params.data_dir} \
-        --n_events=none \
-        """
-
-
-rule reshape_and_sort:
+        expand(data_dir / "{{project_name}}/{{gen_dope}}_seed_{{seed}}_fold_{fold}/original_test.h5", fold=folds),
+        expand(data_dir / "{{project_name}}/{{gen_dope}}_seed_{{seed}}_fold_{fold}/additional_test.h5", fold=folds),
     output:
-        data_dir / "{gen}.h5",
+        data_dir / "{project_name}/{gen_dope}_seed_{seed}_combined/pythia.h5",
+        data_dir / "{project_name}/{gen_dope}_seed_{seed}_combined/herwig.h5",
     params:
-        data_dir=data_dir,
-        out_file=lambda w: f"{w.gen}.h5",
-        raw_file=lambda w: f"{config['raw_files'][w.gen]}",
-    resources:
-        mem_mb=128_000,
-        slurm_partition="public-bigmem",
+        data_dir = lambda w: data_dir / f"{w.project_name}",
+        pattern = lambda w: f"{w.gen_dope}_seed_{w.seed}_fold_*",
+        output_path = lambda w: f"{w.gen_dope}_seed_{w.seed}_combined",
     shell:
         """
-        python scripts/reshape_and_sort.py \
+        python scripts/combine_folds.py \
         --data_dir={params.data_dir} \
-        --raw_file={params.raw_file} \
-        --out_file={params.out_file} \
+        --pattern={params.pattern} \
+        --output_path={params.output_path} \
         """
+
+
+rule train_and_save_predictions:
+    """For each seed, fold, dope, etc, train a classifier and export the scores."""
+    input:
+        data_dir / "clustered_pythia_sig.h5",
+        lambda w: data_dir / ("clustered_herwig_bkg.h5" if w.gen == "herwig" else "clustered_pythia_bkg.h5"),
+    output:
+        data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/original_test.h5",
+        data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/additional_test.h5",
+    params:
+        output_dir=data_dir,
+        n_sig=90_000,
+        n_bkg=1000_000,
+        num_folds=config["num_folds"],
+        network_name=lambda w: f"{w.gen}_{w.dope}_seed_{w.seed}_fold_{w.fold}",
+        bkg_file=lambda w: "clustered_herwig_bkg.h5" if w.gen == "herwig" else "clustered_pythia_bkg.h5",
+        extra_test=lambda w: "clustered_pythia_bkg.h5" if w.gen == "herwig" else "clustered_herwig_bkg.h5"
+    resources:
+        slurm_partition="shared-gpu,private-dpnc-gpu",
+        runtime=60 * 8,
+        cpus_per_task=6,
+        slurm_extra="--gres=gpu:1 --constraint=COMPUTE_TYPE_AMPERE",
+    shell:
+        """
+        python scripts/train.py \
+        network_name={params.network_name} \
+        output_dir={params.output_dir} \
+        project_name={wildcards.project_name} \
+        seed={wildcards.seed} \
+        datamodule.n_sig={params.n_sig} \
+        datamodule.n_bkg={params.n_bkg} \
+        datamodule.n_dope={wildcards.dope} \
+        datamodule.test_fold={wildcards.fold} \
+        datamodule.num_folds={params.num_folds} \
+        datamodule.bkg_file={params.bkg_file} \
+        datamodule.sig_file=clustered_pythia_sig.h5 \
+        datamodule.extra_test={params.extra_test} \
+        """
+
+
+# rule cluster:
+#     """Cluster the events and extract the leading two jets and their constituents."""
+#     input:
+#         data_dir / "{gen}_{sorb}.h5",
+#     output:
+#         data_dir / "clustered_{gen}_{sorb}.h5",
+#     params:
+#         data_dir=data_dir,
+#         event_id_start=lambda w: config["event_id_start"][f"{w.gen}_{w.sorb}"],
+#     resources:
+#         mem_mb=200_000,  # Ridiculous amount of memory - need to fix!
+#         slurm_partition="public-bigmem,shared-bigmem",
+#     shell:
+#         """
+#         python scripts/cluster.py \
+#         --input_file={wildcards.gen}_{wildcards.sorb}.h5 \
+#         --data_dir={params.data_dir} \
+#         --n_events=none \
+#         --event_id_start={params.event_id_start} \
+#         """
+
+
+# rule sort_split:
+#     """Reshape the constituents, sort each event by pT and split into sig and bkg."""
+#     output:
+#         data_dir / "{gen}_bkg.h5",
+#         data_dir / "{gen}_sig.h5",
+#     params:
+#         data_dir=data_dir,
+#         raw_file=lambda w: f"{config['raw_files'][w.gen]}",
+#     resources:
+#         mem_mb=100_000,
+#         slurm_partition="public-bigmem,shared-bigmem",
+#     shell:
+#         """
+#         python scripts/sort_split.py \
+#         --data_dir={params.data_dir} \
+#         --raw_file={params.raw_file} \
+#         --out_flag={wildcards.gen} \
+#         """

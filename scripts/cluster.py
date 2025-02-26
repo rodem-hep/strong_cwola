@@ -55,7 +55,7 @@ def parse_args() -> argparse.Namespace:
         "--n_events",
         type=none_or_int,
         help="Number of events (None for all)",
-        default=1000,
+        default=None,
     )
     parser.add_argument(
         "--n_csts",
@@ -81,6 +81,12 @@ def parse_args() -> argparse.Namespace:
         default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/",
         help="Path to the output file",
     )
+    parser.add_argument(
+        "--event_id_start",
+        type=int,
+        default=0,
+        help="Starting event id",
+    )
 
     return parser.parse_args()
 
@@ -94,12 +100,13 @@ def main() -> None:
     with h5py.File(in_path, "r") as file:
         csts = file["csts"][: args.n_events]  # Must cluster with all constituents
         labels = file["labels"][: args.n_events]
+    log.info(f"Loaded {csts.shape[0]} events")
 
     log.info(f"Clustering each event using anti-kt with R={args.R}")
     jetdef = fastjet.JetDefinition(fastjet.antikt_algorithm, args.R)
     clusters = cluster_numpy_batch(csts, jetdef, mask=csts[..., 0] > 0)
+    del csts  # Free up memory
 
-    # We are only interested in the leading two jets per event
     log.info("Extracting the leading two jets")
     jets = clusters.inclusive_jets()[:, -2:]  # Output is increasing in PT
     csts = clusters.constituents()[:, -2:]
@@ -121,6 +128,7 @@ def main() -> None:
         log.info("Subclustering the leading jets with GenKT")
         subjetdef = fastjet.JetDefinition(fastjet.genkt_algorithm, 1.0, 1.0)
         subjets = fastjet.ClusterSequence(x, subjetdef)
+        del x  # Free up memory
 
         log.info("Subclustering using njet = 1...")
         subjets1 = subjets.exclusive_jets(n_jets=1)
@@ -153,12 +161,14 @@ def main() -> None:
     jet2_cnsts = make_padded(csts[:, -2], args.n_csts)[..., :3]
     convert_to_relative(jet1_cnsts, jet1_obs)
     convert_to_relative(jet2_cnsts, jet2_obs)
+    del csts  # Free up memory
 
     log.info("Calculating the invariant mass of the leading two jets")
     mjj = ((jets[:, -1] + jets[:, -2]).m).to_numpy()[:, None]  # N x 1
 
     log.info("Creating an event idx variable")
     event_ids = np.arange(jet1_obs.shape[0], dtype=np.int32)[:, None]  # N x 1
+    event_ids += args.event_id_start  # Start from the requested event id
 
     out_path = args.data_dir / ("clustered_" + args.input_file)
     log.info(f"Saving all data to {out_path}")

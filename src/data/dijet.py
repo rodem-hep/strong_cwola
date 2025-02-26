@@ -2,6 +2,7 @@ import logging
 from copy import deepcopy
 from pathlib import Path
 
+import numpy as np
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 
@@ -32,7 +33,7 @@ class DijetModule(LightningDataModule):
         data_dir: str,
         sig_file: str,
         bkg_file: str,
-        extra_test_file: str,
+        extra_test: str,
         loader_kwargs: dict,
         mjj_window: tuple | list | None = None,
         n_sig: int | None = None,
@@ -72,12 +73,14 @@ class DijetModule(LightningDataModule):
         log.info(f"Test set size: {len(self.test_set)}")
 
         # Load the extra test data
-        self.extra_test = load_dijet_file(
-            Path(data_dir, extra_test_file),
+        extra_test = load_dijet_file(
+            Path(data_dir, extra_test),
             mjj_window,
             None,  # All events
             n_csts,
         )
+        extra_test["cwola_labels"] = np.zeros_like(extra_test["labels"])
+        self.extra_test = DictDataset(extra_test)
         log.info(f"Extra test set size: {len(self.extra_test)}")
 
     def train_dataloader(self) -> DataLoader:

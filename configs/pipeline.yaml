@@ -6,10 +6,17 @@ raw_files:
   pythia: events_anomalydetection_v2.h5
   herwig: events_LHCO2020_BlackBox2.h5
 
-num_folds: 5
-num_seeds: 5
+# Ensures that all events have unique IDs
+event_id_start:
+  pythia_sig: 0
+  pythia_bkg: 1000_000
+  herwig_bkg: 2000_000
+
+num_folds: 5 # At least 3 for train/val/test
+num_seeds: 1
 dope:
   - 0
+  - 500
   - 1000
   - 3000
 

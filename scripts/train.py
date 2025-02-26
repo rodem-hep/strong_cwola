@@ -1,7 +1,6 @@
 """Basic training script."""
 
 import logging
-from pathlib import Path
 
 import h5py
 import hydra
@@ -19,7 +18,7 @@ from mltools.mltools.hydra_utils import (
     reload_original_config,
     save_config,
 )
-from mltools.mltools.torch_utils import to_np
+from mltools.mltools.torch_utils import to_numpy
 from mltools.mltools.utils import save_declaration
 
 log = logging.getLogger(__name__)
@@ -99,22 +98,19 @@ def main(cfg: DictConfig) -> None:
             ckpt_path = None
 
         log.info("Running inference on test set")
-        outputs = trainer.predict(
+        all_outputs = trainer.predict(
             model=model, datamodule=datamodule, ckpt_path=ckpt_path
         )
 
         log.info("Looping over the test sets")
-        for i, output in enumerate(outputs):
-            log.info("Combining predictions across dataset")
+        for tag, output in zip(["original_test", "additional_test"], all_outputs):
+            log.info(f"Combining predictions for test set: {tag}")
             keys = list(output[0].keys())
-            score_dict = {k: T.vstack([o[k] for o in outputs]) for k in keys}
-            score_dict = to_np(score_dict)
+            score_dict = {k: T.vstack([o[k] for o in output]) for k in keys}
+            score_dict = to_numpy(score_dict)
 
-            output_path = Path(cfg.full_path / "outputs" / f"test_set_{i}.h5")
-
-            log.info(f"Saving outputs to {output_path}")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with h5py.File(output_path, mode="w") as file:
+            log.info(f"Saving outputs to {tag}.h5")
+            with h5py.File(f"{tag}.h5", mode="w") as file:
                 for k in keys:
                     file.create_dataset(k, data=score_dict[k])
 

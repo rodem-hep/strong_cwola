@@ -9,8 +9,8 @@ log = logging.getLogger(__name__)
 
 def k_fold_split(dataset: dict, num_folds: int, test_fold: int) -> tuple:
     """Perform a k-fold splitting of a mappable dataset."""
-    assert num_folds > 0, "The number of folds must be greater than 0"
-    assert test_fold < num_folds - 1, "The test fold index must be less than num_folds"
+    assert num_folds > 2, "The number of folds must be greater than 2"
+    assert test_fold < num_folds, "The test fold index must be less than num_folds"
 
     # Get the fold index of each element in the dataset
     n = next(iter(dataset.values())).shape[0]
@@ -75,7 +75,13 @@ def load_dijet_file(
             else:
                 data[key] = f[key][:n_events].astype(np.float32)
     mask = get_mass_mask(data["mjj"], mjj_window).reshape(-1)
-    return {k: v[mask] for k, v in data.items()}
+    data = {k: v[mask] for k, v in data.items()}
+
+    # Add an extra column for the type of generator used (based on the file name)
+    # Useful for filtering during plotting
+    data["is_pythia"] = np.ones_like(data["labels"]) * ("pythia" in file_path.name)
+
+    return data
 
 
 def load_strong_cwola_data(
@@ -87,6 +93,7 @@ def load_strong_cwola_data(
     n_dope: int | None = None,
     n_csts: int | None = 0,
 ) -> tuple:
+    assert n_dope < n_bkg, "The number of dope events must be less than bkg"
     bkg_data = load_dijet_file(bkg_path, mjj_window, n_bkg - n_dope, n_csts)
     sig_data = load_dijet_file(sig_path, mjj_window, n_sig, n_csts)
     dope_data = load_dijet_file(sig_path, mjj_window, n_dope, n_csts, from_bottom=True)
