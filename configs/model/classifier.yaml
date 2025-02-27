@@ -11,7 +11,7 @@ embed_config:
   dropout: 0.3
 
 encoder_config:
-  dim: 64
+  dim: 128
   ctxt_dim: 32
   num_layers: 3
   num_registers: 4

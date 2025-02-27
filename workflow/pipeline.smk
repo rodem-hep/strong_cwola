@@ -97,6 +97,7 @@ rule train_and_save_predictions:
         slurm_partition="shared-gpu,private-dpnc-gpu",
         runtime=60 * 12,
         cpus_per_task=6,
+
         slurm_extra="--gres=gpu:1 --constraint=COMPUTE_TYPE_AMPERE",
     shell:
         """
@@ -132,6 +133,7 @@ rule pretrain:
         slurm_partition="shared-gpu,private-dpnc-gpu",
         runtime=60 * 8,
         cpus_per_task=6,
+        mem_mb: 40_000, # Lots of memory as the whole Mjj spectrum is loaded
         slurm_extra="--gres=gpu:1 --constraint=COMPUTE_TYPE_AMPERE",
     shell:
         """

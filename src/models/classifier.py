@@ -1,7 +1,6 @@
 from functools import partial
 
 import torch as T
-import torch.nn.functional as F
 from lightning import LightningModule
 
 from mltools.mltools.loss import sigmoid_focal_loss
