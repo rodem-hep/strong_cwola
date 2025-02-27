@@ -1,4 +1,0 @@
-# @package _global_
-
-encoder_config:
-  dim: 64

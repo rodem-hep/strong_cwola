@@ -1,0 +1,18 @@
+_target_: src.data.dijet.PretrainingDataModule
+
+data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
+file_list:
+ - clustered_pythia_sig.h5
+ - clustered_pythia_bkg.h5
+ - clustered_herwig_bkg.h5
+mjj_window: null # Pretrain on everything
+n_csts: 100 # This is per jet
+val_frac: 0.1
+transforms:
+  - _target_: src.data.preprocessing.mask_batch
+    _partial_: True
+    mask_fraction: 0.5
+loader_kwargs:
+  pin_memory: true
+  batch_size: 1024
+  num_workers: 6

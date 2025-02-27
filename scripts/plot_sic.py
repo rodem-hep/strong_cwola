@@ -29,7 +29,13 @@ def get_sic(
     sic = tpr / np.sqrt(fpr)
 
     # For ease in plotting, interpolate on the fixed x_space
-    return interp1d(tpr, sic, kind="linear", fill_value="extrapolate")(x_space)
+    return interp1d(1 / fpr, sic, kind="linear", fill_value="extrapolate")(x_space)
+
+
+def folder_split(folder_path: Path) -> tuple:
+    """Split the folder name into the generation, dope, and seed."""
+    gen, dope, _, seed, _ = folder_path.name.split("_")
+    return (gen, int(dope), int(seed))
 
 
 def parse_args():
@@ -57,7 +63,7 @@ def main() -> None:
     log.info(f"Found {len(folders)} folders")
 
     # Sort the folders alphabetically
-    folders = sorted(folders, key=lambda x: x.name)
+    folders = sorted(folders, key=folder_split)
 
     # Concatenate each outputs pythia and herwig file
     pythia_files = [f / "pythia.h5" for f in folders]
@@ -68,7 +74,7 @@ def main() -> None:
     ]
 
     log.info("Calculating the SIC for pythia samples")
-    x_space = np.linspace(0.7, 1, 100)
+    x_space = 10 ** (np.linspace(1, 4, 100))
     test_sics = [
         get_sic(
             d["labels"][d["is_pythia"] == 1],
@@ -86,13 +92,16 @@ def main() -> None:
     log.info("Plotting the SIC")
     fig, axis = plt.subplots(1, 1, figsize=(8, 6))
     for i, folder in enumerate(folders):
-        gen, dope, _, seed, _ = folder.name.split("_")
-        color = colours[int(dope)]
+        gen, dope, seed = folder_split(folder)
+        color = colours[dope]
         linestyle = linestyles[gen]
-        label = f"{gen} {dope}" if seed == "0" else None
+        label = f"{gen} {dope}" if seed == 0 else None
         axis.plot(x_space, test_sics[i], color, linestyle=linestyle, label=label)
     axis.legend()
-    axis.set_xlabel("Signal Efficiency")
+    axis.set_xscale("log")
+    axis.set_xlim(x_space[0], x_space[-1])
+    axis.set_ylim(bottom=0)
+    axis.set_xlabel("1 / FPR")
     axis.set_ylabel("SIC")
     fig.savefig(args.data_dir / "sic.png")
     plt.close()

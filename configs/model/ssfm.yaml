@@ -1,5 +1,4 @@
-_target_: src.models.classifier.Classifier
-backbone_path: null
+_target_: src.models.ssfm.SSFM
 
 embed_config:
   hddn_dim: 64
@@ -11,7 +10,7 @@ embed_config:
   dropout: 0.3
 
 encoder_config:
-  dim: 64
+  dim: 128
   ctxt_dim: 32
   num_layers: 3
   num_registers: 4
@@ -22,9 +21,17 @@ encoder_config:
     attn_config:
       dropout: 0.3
 
-ca_config:
-  dim: 64
-  num_layers: 2
+decoder_config:
+  dim: 128 # Must be the same as the encoder
+  ctxt_dim: 32
+  num_layers: 3
+  num_registers: 0 # Must be 0!
+  pack_inputs: True
+  layer_config:
+    ff_config:
+      dropout: 0.3
+    attn_config:
+      dropout: 0.3
 
 optimizer:
   _target_: mltools.mltools.optimisers.AdamWS
@@ -36,5 +43,5 @@ optimizer:
 scheduler:
   _target_: mltools.mltools.lightning_utils.linear_warmup_cosine_decay
   _partial_: True
-  warmup_steps: 1000
+  warmup_steps: 10_000
   total_steps: -1

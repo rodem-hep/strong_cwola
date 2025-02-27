@@ -6,10 +6,18 @@ lr_monitor:
   _target_: lightning.pytorch.callbacks.LearningRateMonitor
   logging_interval: step
 
-checkpoint_per_epoch:
+backbone_finetune:
+  _target_: mltools.mltools.lightning_utils.CatchupToLR
+  unfreeze_at_step: 1000
+  catchup_steps: 1000
+
+best_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
   dirpath: ${full_path}/checkpoints
-  filename: last
-  enable_version_counter: False
+  filename: best
+  monitor: valid/loss
+  mode: min
+  save_weights_only: True
   auto_insert_metric_name: False
+  enable_version_counter: False
 

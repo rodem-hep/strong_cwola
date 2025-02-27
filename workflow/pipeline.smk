@@ -80,6 +80,8 @@ rule train_and_save_predictions:
     input:
         data_dir / "clustered_pythia_sig.h5",
         lambda w: data_dir / ("clustered_herwig_bkg.h5" if w.gen == "herwig" else "clustered_pythia_bkg.h5"),
+        data_dir / "{project_name}/ssfm/backbone.pkl",
+        data_dir / "{project_name}/ssfm/done.txt",
     output:
         data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/original_test.h5",
         data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/additional_test.h5",
@@ -93,7 +95,7 @@ rule train_and_save_predictions:
         extra_test=lambda w: "clustered_pythia_bkg.h5" if w.gen == "herwig" else "clustered_herwig_bkg.h5"
     resources:
         slurm_partition="shared-gpu,private-dpnc-gpu",
-        runtime=60 * 8,
+        runtime=60 * 12,
         cpus_per_task=6,
         slurm_extra="--gres=gpu:1 --constraint=COMPUTE_TYPE_AMPERE",
     shell:
@@ -103,6 +105,7 @@ rule train_and_save_predictions:
         output_dir={params.output_dir} \
         project_name={wildcards.project_name} \
         seed={wildcards.seed} \
+        model.backbone_path={params.output_dir}/{wildcards.project_name}/ssfm/backbone.pkl \
         datamodule.n_sig={params.n_sig} \
         datamodule.n_bkg={params.n_bkg} \
         datamodule.n_dope={wildcards.dope} \
@@ -114,43 +117,69 @@ rule train_and_save_predictions:
         """
 
 
-# rule cluster:
-#     """Cluster the events and extract the leading two jets and their constituents."""
-#     input:
-#         data_dir / "{gen}_{sorb}.h5",
-#     output:
-#         data_dir / "clustered_{gen}_{sorb}.h5",
-#     params:
-#         data_dir=data_dir,
-#         event_id_start=lambda w: config["event_id_start"][f"{w.gen}_{w.sorb}"],
-#     resources:
-#         mem_mb=200_000,  # Ridiculous amount of memory - need to fix!
-#         slurm_partition="public-bigmem,shared-bigmem",
-#     shell:
-#         """
-#         python scripts/cluster.py \
-#         --input_file={wildcards.gen}_{wildcards.sorb}.h5 \
-#         --data_dir={params.data_dir} \
-#         --n_events=none \
-#         --event_id_start={params.event_id_start} \
-#         """
+rule pretrain:
+    """Create a pretrained model using SSFM."""
+    input:
+        data_dir / "clustered_pythia_sig.h5",
+        data_dir / "clustered_pythia_bkg.h5",
+        data_dir / "clustered_herwig_bkg.h5",
+    output:
+        data_dir / "{project_name}/ssfm/backbone.pkl",
+        data_dir / "{project_name}/ssfm/done.txt",
+    params:
+        output_dir=data_dir,
+    resources:
+        slurm_partition="shared-gpu,private-dpnc-gpu",
+        runtime=60 * 8,
+        cpus_per_task=6,
+        slurm_extra="--gres=gpu:1 --constraint=COMPUTE_TYPE_AMPERE",
+    shell:
+        """
+        python scripts/train.py \
+        experiment=pretrain \
+        network_name=ssfm \
+        output_dir={params.output_dir} \
+        project_name={wildcards.project_name} \
+        """
 
 
-# rule sort_split:
-#     """Reshape the constituents, sort each event by pT and split into sig and bkg."""
-#     output:
-#         data_dir / "{gen}_bkg.h5",
-#         data_dir / "{gen}_sig.h5",
-#     params:
-#         data_dir=data_dir,
-#         raw_file=lambda w: f"{config['raw_files'][w.gen]}",
-#     resources:
-#         mem_mb=100_000,
-#         slurm_partition="public-bigmem,shared-bigmem",
-#     shell:
-#         """
-#         python scripts/sort_split.py \
-#         --data_dir={params.data_dir} \
-#         --raw_file={params.raw_file} \
-#         --out_flag={wildcards.gen} \
-#         """
+rule cluster:
+    """Cluster the events and extract the leading two jets and their constituents."""
+    input:
+        data_dir / "{gen}_{sorb}.h5",
+    output:
+        data_dir / "clustered_{gen}_{sorb}.h5",
+    params:
+        data_dir=data_dir,
+        event_id_start=lambda w: config["event_id_start"][f"{w.gen}_{w.sorb}"],
+    resources:
+        mem_mb=200_000,  # Ridiculous amount of memory - need to fix!
+        slurm_partition="public-bigmem,shared-bigmem",
+    shell:
+        """
+        python scripts/cluster.py \
+        --input_file={wildcards.gen}_{wildcards.sorb}.h5 \
+        --data_dir={params.data_dir} \
+        --n_events=none \
+        --event_id_start={params.event_id_start} \
+        """
+
+
+rule sort_split:
+    """Reshape the constituents, sort each event by pT and split into sig and bkg."""
+    output:
+        data_dir / "{gen}_bkg.h5",
+        data_dir / "{gen}_sig.h5",
+    params:
+        data_dir=data_dir,
+        raw_file=lambda w: f"{config['raw_files'][w.gen]}",
+    resources:
+        mem_mb=100_000,
+        slurm_partition="public-bigmem,shared-bigmem",
+    shell:
+        """
+        python scripts/sort_split.py \
+        --data_dir={params.data_dir} \
+        --raw_file={params.raw_file} \
+        --out_flag={wildcards.gen} \
+        """

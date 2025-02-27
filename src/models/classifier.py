@@ -5,11 +5,9 @@ import torch.nn.functional as F
 from lightning import LightningModule
 
 from mltools.mltools.loss import sigmoid_focal_loss
-from mltools.mltools.mlp import MLP
-from mltools.mltools.modules import IterativeNormLayer
 from mltools.mltools.torch_utils import to_device
-from mltools.mltools.transformers import ClassAttentionPooling, Transformer
-from src.models.utils import calculate_signal_efficiency
+from mltools.mltools.transformers import ClassAttentionPooling
+from src.models.utils import JetBackbone, calculate_signal_efficiency
 
 
 class Classifier(LightningModule):
@@ -24,33 +22,29 @@ class Classifier(LightningModule):
         ca_config: dict,
         optimizer: partial,
         scheduler: partial,
+        backbone_path: str | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.pos_weight = 1  # Placeholder - Will be set in on_train_start
+        self.pos_weight = 1  # Placeholder - Set in on_fit_start()
 
         # Decode the data sample to get the dimensions
-        self.cst_dim = data_sample["csts1"].shape[-1] + 1  # Extra dim for njet flag
-        self.hlv_dim = data_sample["jets1"].shape[-1]
-        self.mjj_dim = data_sample["mjj"].shape[-1]
-        self.ctxt_dim = self.hlv_dim * 2 + self.mjj_dim  # Combined context
+        self.csts_dim = data_sample["csts"].shape[-1]
+        self.ctxt_dim = data_sample["ctxt"].shape[-1]
 
-        # Normalisation layers
-        self.cst_norm = IterativeNormLayer(self.cst_dim)
-        self.ctxt_norm = IterativeNormLayer(self.ctxt_dim)
+        # Initialise the backbone of the model
+        if backbone_path is not None:
+            self.backbone = JetBackbone.from_path(backbone_path)
+        else:
+            self.backbone = JetBackbone.from_config(
+                self.csts_dim, self.ctxt_dim, embed_config, encoder_config
+            )
 
-        # The single transformer encoder for the constituents
-        self.encoder = Transformer(**encoder_config)
-
-        # The embedders for the constituents and the hlv
-        self.cst_embed = MLP(self.cst_dim, self.encoder.inpt_dim, **embed_config)
-        self.ctxt_embed = MLP(self.ctxt_dim, self.encoder.ctxt_dim, **embed_config)
-
-        # The class attention layer
+        # The class attention layer for pooling
         self.ca = ClassAttentionPooling(
-            inpt_dim=self.encoder.outp_dim,
+            inpt_dim=self.backbone.outp_dim,
             outp_dim=1,
             **ca_config,
         )
@@ -60,7 +54,7 @@ class Classifier(LightningModule):
         self.val_true_labels = []
         self.val_cwola_labels = []
 
-    def on_fit_start(self):
+    def on_fit_start(self) -> None:
         """Get the positive weight from the associated datamodule."""
         self.pos_weight = T.tensor(
             self.trainer.datamodule.pos_weight,
@@ -70,33 +64,14 @@ class Classifier(LightningModule):
 
     def forward(self, batch: dict) -> T.Tensor:
         """Pass through the network."""
-        csts1 = batch["csts1"]
-        csts2 = batch["csts2"]
-        jets1 = batch["jets1"]
-        jets2 = batch["jets2"]
-        mjj = batch["mjj"]
-
-        # Concatenate the two jets - one monolithic input for one monolithic model
-        csts1 = F.pad(csts1, (0, 1), value=0)  # Pad the last dimension with a njet flag
-        csts2 = F.pad(csts2, (0, 1), value=1)
-        csts = T.cat([csts1, csts2], dim=1)  # Batch x N x D
-        hlv = T.cat([jets1, jets2, mjj], dim=1)  # Batch x D
-        mask = csts[..., 0] > 0
-        csts = self.cst_norm(csts, mask)  # Normalise
-        hlv = self.ctxt_norm(hlv)
-        csts = self.cst_embed(csts)  # Embed
-        hlv = self.ctxt_embed(hlv)
-        x = self.encoder(csts, ctxt=hlv, mask=mask)  # Main transformer
-        mask = self.encoder.get_combined_mask(mask)  # Might gain registers
-        return self.ca(x, mask=mask)  # Class attention
+        x, m = self.backbone(batch["csts"], batch["mask"], batch["ctxt"])
+        return self.ca(x, mask=m)  # Class attention
 
     def _shared_step(self, batch: dict, flag: str) -> T.Tensor:
         outputs = self.forward(batch)
         targets = batch["cwola_labels"]
         loss = sigmoid_focal_loss(
-            outputs.squeeze(),
-            targets,
-            pos_weight=self.pos_weight,
+            outputs.squeeze(), targets, pos_weight=self.pos_weight
         )
         self.log(f"{flag}/loss", loss)
 

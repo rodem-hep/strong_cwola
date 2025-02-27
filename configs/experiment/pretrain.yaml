@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - override /datamodule: pretrain
+  - override /callbacks: pretrain
+  - override /model: ssfm
+
+# For long training
+trainer:
+  max_epochs: 100
+
+# Model modifications
+network_name: ssfm
+save_test_preds: False # Must not save!

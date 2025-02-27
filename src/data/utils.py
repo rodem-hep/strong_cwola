@@ -7,6 +7,24 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
+def combine_csts_and_jets(data: dict) -> None:
+    """Inplace change the keys for the constituents and jets."""
+    last_dim = ((0, 0), (0, 0), (0, 1))
+    csts1 = np.pad(data["csts1"], last_dim, constant_values=0)  # Final val is jet flag
+    csts2 = np.pad(data["csts2"], last_dim, constant_values=1)
+    data["csts"] = np.concatenate([csts1, csts2], axis=1)
+    data["mask"] = data["csts"][..., 0] > 0
+    del data["csts1"]
+    del data["csts2"]
+
+    jets1 = data["jets1"]
+    jets2 = data["jets2"]
+    mjj = data["mjj"]
+    data["ctxt"] = np.concatenate([jets1, jets2, mjj], axis=1)
+    del data["jets1"]
+    del data["jets2"]  # Dont delete MJJ we need it for plotting!
+
+
 def k_fold_split(dataset: dict, num_folds: int, test_fold: int) -> tuple:
     """Perform a k-fold splitting of a mappable dataset."""
     assert num_folds > 2, "The number of folds must be greater than 2"
@@ -76,6 +94,9 @@ def load_dijet_file(
                 data[key] = f[key][:n_events].astype(np.float32)
     mask = get_mass_mask(data["mjj"], mjj_window).reshape(-1)
     data = {k: v[mask] for k, v in data.items()}
+
+    # Combine the constituents and jets into a single array
+    combine_csts_and_jets(data)
 
     # Add an extra column for the type of generator used (based on the file name)
     # Useful for filtering during plotting
