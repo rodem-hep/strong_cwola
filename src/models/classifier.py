@@ -2,6 +2,7 @@ from functools import partial
 
 import torch as T
 from lightning import LightningModule
+from torch.nn import functional as F
 
 from mltools.mltools.torch_utils import to_device
 from mltools.mltools.transformers import ClassAttentionPooling
@@ -68,9 +69,10 @@ class Classifier(LightningModule):
     def _shared_step(self, batch: dict, flag: str) -> T.Tensor:
         outputs = self.forward(batch)
         targets = batch["cwola_labels"]
-        loss = T.binary_cross_entropy_with_logits(
-            outputs.squeeze(), targets, pos_weight=self.pos_weight
-        )
+
+        # Use MAE loss - It is anti-focal, which is better for incorrect labels
+        weight = T.where(targets == 1, self.pos_weight, T.ones_like(targets))
+        loss = F.l1_loss(outputs.squeeze(), targets, weight=weight)
         self.log(f"{flag}/loss", loss)
 
         if flag == "valid":
