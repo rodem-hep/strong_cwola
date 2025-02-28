@@ -3,7 +3,6 @@ from functools import partial
 import torch as T
 from lightning import LightningModule
 
-from mltools.mltools.loss import sigmoid_focal_loss
 from mltools.mltools.torch_utils import to_device
 from mltools.mltools.transformers import ClassAttentionPooling
 from src.models.utils import JetBackbone, calculate_signal_efficiency
@@ -69,7 +68,7 @@ class Classifier(LightningModule):
     def _shared_step(self, batch: dict, flag: str) -> T.Tensor:
         outputs = self.forward(batch)
         targets = batch["cwola_labels"]
-        loss = sigmoid_focal_loss(
+        loss = T.binary_cross_entropy_with_logits(
             outputs.squeeze(), targets, pos_weight=self.pos_weight
         )
         self.log(f"{flag}/loss", loss)
