@@ -47,6 +47,8 @@ class Classifier(LightningModule):
             outp_dim=1,
             **ca_config,
         )
+        self.ca.linear_out.weight.data.zero_()
+        self.ca.linear_out.bias.data.fill_(0.5)  # Non-biased initialisation
 
         # Metrics for the model
         self.val_outs = []
@@ -71,8 +73,15 @@ class Classifier(LightningModule):
         targets = batch["cwola_labels"]
 
         # Use MAE loss - It is anti-focal, which is better for incorrect labels
-        weight = T.where(targets == 1, self.pos_weight, T.ones_like(targets))
-        loss = F.l1_loss(outputs.squeeze(), targets, weight=weight)
+        # weight = 1 + (self.pos_weight - 1) * targets
+        # loss = ((outputs.squeeze() - targets).abs() * weight).mean()
+        # loss = sigmoid_focal_loss(
+        #     outputs.squeeze(), targets, pos_weight=self.pos_weight
+        # )
+        loss = F.binary_cross_entropy_with_logits(
+            outputs.squeeze(), targets, pos_weight=self.pos_weight
+        )
+
         self.log(f"{flag}/loss", loss)
 
         if flag == "valid":

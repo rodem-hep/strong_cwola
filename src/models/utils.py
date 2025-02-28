@@ -68,7 +68,7 @@ class JetBackbone(nn.Module):
 
 
 def calculate_signal_efficiency(
-    scores: T.Tensor, labels: T.Tensor, rejection_rate: float = 0.999
+    scores: T.Tensor, labels: T.Tensor, rejection_rate: float = 0.95
 ) -> T.Tensor:
     """Calculate the signal efficiency at a given background rejection rate."""
     # Pull out the background scores and sort them

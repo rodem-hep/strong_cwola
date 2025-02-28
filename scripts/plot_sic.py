@@ -74,7 +74,7 @@ def main() -> None:
     ]
 
     log.info("Calculating the SIC for pythia samples")
-    x_space = 10 ** (np.linspace(1, 5, 100))
+    x_space = 10 ** (np.linspace(1, 5, 500))
     test_sics = [
         get_sic(
             d["labels"][d["is_pythia"] == 1],
