@@ -37,6 +37,9 @@ def main(cfg: DictConfig) -> None:
             cfg = old_cfg
     print_config(cfg)
 
+    log.info("Instantiating the logger")
+    logger = hydra.utils.instantiate(cfg.logger)
+
     log.info(f"Setting seed to: {cfg.seed}")
     pl.seed_everything(cfg.seed, workers=True)
 
@@ -67,9 +70,6 @@ def main(cfg: DictConfig) -> None:
 
     log.info("Instantiating all callbacks")
     callbacks = instantiate_collection(cfg.callbacks)
-
-    log.info("Instantiating the logger")
-    logger = hydra.utils.instantiate(cfg.logger)
 
     log.info("Instantiating the trainer")
     trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)

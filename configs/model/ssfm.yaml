@@ -3,14 +3,14 @@ _target_: src.models.ssfm.SSFM
 embed_config:
   hddn_dim: 64
   num_blocks: 1
-  norm: LayerNorm
+  norm: RMSNorm
   act_o: SiLU
   act_h: SiLU
   norm_on_output: True
   dropout: 0.3
 
 encoder_config:
-  dim: 128
+  dim: 64
   ctxt_dim: 32
   num_layers: 3
   num_registers: 4
@@ -22,7 +22,7 @@ encoder_config:
       dropout: 0.3
 
 decoder_config:
-  dim: 128 # Must be the same as the encoder
+  dim: 64 # Must be the same as the encoder
   ctxt_dim: 32
   num_layers: 3
   num_registers: 0 # Must be 0!

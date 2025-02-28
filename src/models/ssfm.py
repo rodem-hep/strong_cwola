@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 
 import torch as T
@@ -6,7 +7,7 @@ from torch import nn
 
 from mltools.mltools.mlp import MLP
 from mltools.mltools.modules import Fourier, IterativeNormLayer
-from mltools.mltools.torch_utils import append_dims
+from mltools.mltools.torch_utils import append_dims, ema_param_sync
 from mltools.mltools.transformers import Transformer
 from src.models.utils import JetBackbone
 
@@ -23,11 +24,13 @@ class SSFM(LightningModule):
         decoder_config: dict,
         optimizer: partial,
         scheduler: partial,
+        ema_decay: float = 0.999,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.ema_decay = ema_decay
 
         # Decode the data sample to get the dimensions
         self.csts_dim = data_sample["csts"].shape[-1]
@@ -41,6 +44,10 @@ class SSFM(LightningModule):
             use_decoder=True,
             **decoder_config,
         )
+
+        # Create an offline version of the encoder which is used for the backbone
+        self.ema_enc = deepcopy(self.encoder)
+        self.ema_enc.requires_grad_(False)
 
         # The embedding and normalisation layers
         self.csts_norm = IterativeNormLayer(self.csts_dim)
@@ -57,22 +64,31 @@ class SSFM(LightningModule):
         # Does require and ampere GPU though...
         self.encoder.pack_inputs = True
         self.decoder.pack_inputs = True
+        self.ema_enc.pack_inputs = True
         self.encoder.unpack_output = False
         self.decoder.unpack_output = False
+        self.ema_enc.unpack_output = False
 
-    def forward(self, batch: dict) -> T.Tensor:
+    def forward(self, batch: dict, flag: str = "train") -> T.Tensor:
         """Pass through the network."""
         csts = batch["csts"]
         mask = batch["mask"]
         ctxt = batch["ctxt"]
         null_mask = batch["null_mask"]
 
+        # Use the appropriate encoder
+        encoder = self.encoder if flag == "train" else self.ema_enc
+
         # Training needs the output packed - this could have changed during save
-        self.encoder.unpack_output = False
+        encoder.unpack_output = False
 
         # Split the jets into the two sets (done by masking only)
         enc_mask = mask & ~null_mask
         dec_mask = mask & null_mask
+
+        # Normalise first - this is the target for the denoising too!
+        csts = self.csts_norm(csts, mask)
+        ctxt = self.ctxt_norm(ctxt)
 
         # Get all the values required for the diffusion / flow matching
         x0 = csts  # Clean sample
@@ -83,12 +99,10 @@ class SSFM(LightningModule):
         xt = (1 - t) * x0 + t * x1  # Interpolate
         v = x1[dec_mask] - x0[dec_mask]  # Velocity vector for target
 
-        # Pass through the encoder
-        csts = self.csts_norm(csts, mask)  # Normalise
-        ctxt = self.ctxt_norm(ctxt)
-        csts = self.csts_embed(csts)  # Embed
+        # Embed and pass through the encoder
+        csts = self.csts_embed(csts)
         ctxt = self.ctxt_embed(ctxt)
-        enc_out, enc_culens, enc_maxlen = self.encoder(csts, ctxt=ctxt, mask=enc_mask)
+        enc_out, enc_culens, enc_maxlen = encoder(csts, ctxt=ctxt, mask=enc_mask)
 
         # Get the output of the decoder using, time and context
         dec_out, _, _ = self.decoder(
@@ -105,12 +119,13 @@ class SSFM(LightningModule):
         return ((v - v_hat).square() / log_var.exp() + log_var).mean()
 
     def training_step(self, batch: dict) -> T.Tensor:
-        loss = self.forward(batch)
+        loss = self.forward(batch, flag="train")
         self.log("train/loss", loss)
+        ema_param_sync(self.encoder, self.ema_enc, self.ema_decay)
         return loss
 
     def validation_step(self, data: dict, batch_idx: int) -> T.Tensor:
-        loss = self.forward(data)
+        loss = self.forward(data, flag="valid")
         self.log("valid/loss", loss)
         return loss
 
@@ -127,8 +142,8 @@ class SSFM(LightningModule):
             self.ctxt_norm,
             self.csts_embed,
             self.ctxt_embed,
-            self.encoder,
+            self.ema_enc,  # Make sure to use the EMA encoder
         )
-        backbone.encoder.unpack_output = True  # Safe than sorry
+        backbone.encoder.unpack_output = True  # Make sure the backbone unpacks
         backbone.eval()
         T.save(backbone, "backbone.pkl")

@@ -44,7 +44,7 @@ def parse_args():
         "--data_dir",
         type=Path,
         help="Directory containing the data files",
-        default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/lowstrongcwola/",
+        default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/lowstrongcwola_pipeline/",
     )
     parser.add_argument(
         "--pattern",
@@ -74,7 +74,7 @@ def main() -> None:
     ]
 
     log.info("Calculating the SIC for pythia samples")
-    x_space = 10 ** (np.linspace(1, 4, 100))
+    x_space = 10 ** (np.linspace(1, 5, 100))
     test_sics = [
         get_sic(
             d["labels"][d["is_pythia"] == 1],
@@ -84,19 +84,37 @@ def main() -> None:
         for d in dataframes
     ]
 
+    # Put it all in one dataframe
+    log.info("Combining SIC scores into single dataframe")
+    combined = {}
+    for i, folder in enumerate(folders):
+        gen, dope, seed = folder_split(folder)
+        combined[gen, dope, seed] = test_sics[i]
+    combined = pd.DataFrame(combined).T
+
+    # Group the seeds together, get the mean and std
+    log.info("Grouping the seeds together")
+    combined = combined.groupby(level=[0, 1]).agg(["mean", "std"])
+
     # colours - based on n_dope
-    colours = {0: "k", 100: "m", 500: "g", 1000: "r", 3000: "b"}
-    linestyles = {"pythia": "-", "herwig": "--"}
+    colours = {0: "k", 100: "m", 500: "g", 1000: "r"}
 
     # Plot the SIC
     log.info("Plotting the SIC")
     fig, axis = plt.subplots(1, 1, figsize=(8, 6))
-    for i, folder in enumerate(folders):
-        gen, dope, seed = folder_split(folder)
-        color = colours[dope]
-        linestyle = linestyles[gen]
-        label = f"{gen} {dope}" if seed == 0 else None
-        axis.plot(x_space, test_sics[i], color, linestyle=linestyle, label=label)
+    for gen, dope in combined.index:
+        mean_sics = combined.loc[gen, dope][0::2].values
+        mean_stds = combined.loc[gen, dope][1::2].values
+        color = colours[dope] if gen != "herwig" else "b"
+        label = f"{gen} {dope}"
+        axis.plot(x_space, mean_sics, color, label=label)
+        axis.fill_between(
+            x_space,
+            mean_sics - mean_stds,
+            mean_sics + mean_stds,
+            color=color,
+            alpha=0.2,
+        )
     axis.legend()
     axis.set_xscale("log")
     axis.set_xlim(x_space[0], x_space[-1])

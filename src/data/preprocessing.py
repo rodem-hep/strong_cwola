@@ -56,9 +56,9 @@ def mask_jet(
     n_drop = max(1, min(n_drop, mask.sum() - 1))  # At least one drop / survive
 
     # Generate a random score per node, the lowest frac will be killed
-    rand = T.rand(len(mask))
-    rand[~mask] = 9999
-    drop_idx = T.argsort(rand)[:n_drop]
+    score = T.rand(len(mask))
+    score[~mask] = 9999
+    drop_idx = T.argsort(score)[:n_drop]
 
     # Create the null mask: True = dropped
     null_mask = T.zeros_like(mask, dtype=T.bool)

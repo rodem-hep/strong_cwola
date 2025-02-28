@@ -4,7 +4,7 @@ backbone_path: null
 embed_config:
   hddn_dim: 64
   num_blocks: 1
-  norm: LayerNorm
+  norm: RMSNorm
   act_o: SiLU
   act_h: SiLU
   norm_on_output: True
