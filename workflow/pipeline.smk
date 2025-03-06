@@ -18,9 +18,10 @@ envvars:
 
 # Wildcards not allowed underscores
 wildcard_constraints:
-    gen="[0-9a-zA-Z]+",
+    gen="herwig|pythia",
     fold="[0-9]+",
     seed="[0-9]+",
+    mode="|un_pretrained_",  # The | is a hack to allow an empty string
 
 
 # Important paths become Paths
@@ -36,36 +37,36 @@ gen_dope = [f"pythia_{dope}" for dope in config["dope"]] + ["herwig_0"]
 
 rule all:
     input:
-        data_dir / f"{project_name}/sic.png",
+        expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
 
 rule plot_sic:
     input:
         expand(
-            data_dir / "{{project_name}}/{gen_dope}_seed_{seed}_combined/{file}.h5",
+            data_dir / "{{project_name}}/{{mode}}{gen_dope}_seed_{seed}_combined/{file}.h5",
             gen_dope=gen_dope,
             seed=seeds,
             file=["pythia", "herwig"],
         ),
     output:
-        data_dir / "{project_name}/sic.png",
+        data_dir / "{project_name}/{mode}sic.pdf"
     params:
         data_dir = data_dir / f"{project_name}",
     shell:
-        "python scripts/plot_sic.py --data_dir={params.data_dir}"
+        "python scripts/plot_sic.py --data_dir={params.data_dir} --output={output}"
 
 
 rule combine_folds:
     """Combine the test sets from each fold into a single file."""
     input:
-        expand(data_dir / "{{project_name}}/{{gen_dope}}_seed_{{seed}}_fold_{fold}/original_test.h5", fold=folds),
-        expand(data_dir / "{{project_name}}/{{gen_dope}}_seed_{{seed}}_fold_{fold}/additional_test.h5", fold=folds),
+        expand(data_dir / "{{project_name}}/{{mode}}{{gen_dope}}_seed_{{seed}}_fold_{fold}/original_test.h5", fold=folds),
+        expand(data_dir / "{{project_name}}/{{mode}}{{gen_dope}}_seed_{{seed}}_fold_{fold}/additional_test.h5", fold=folds),
     output:
-        data_dir / "{project_name}/{gen_dope}_seed_{seed}_combined/pythia.h5",
-        data_dir / "{project_name}/{gen_dope}_seed_{seed}_combined/herwig.h5",
+        data_dir / "{project_name}/{mode}{gen_dope}_seed_{seed}_combined/pythia.h5",
+        data_dir / "{project_name}/{mode}{gen_dope}_seed_{seed}_combined/herwig.h5",
     params:
         data_dir = lambda w: data_dir / f"{w.project_name}",
-        pattern = lambda w: f"{w.gen_dope}_seed_{w.seed}_fold_*",
-        output_path = lambda w: f"{w.gen_dope}_seed_{w.seed}_combined",
+        pattern = lambda w: f"{w.mode}{w.gen_dope}_seed_{w.seed}_fold_*",
+        output_path = lambda w: f"{w.mode}{w.gen_dope}_seed_{w.seed}_combined",
     shell:
         """
         python scripts/combine_folds.py \
@@ -81,23 +82,22 @@ rule train_and_save_predictions:
         data_dir / "clustered_pythia_sig.h5",
         lambda w: data_dir / ("clustered_herwig_bkg.h5" if w.gen == "herwig" else "clustered_pythia_bkg.h5"),
         data_dir / "{project_name}/ssfm/done.txt",
-        backbone_path = data_dir / "{project_name}/ssfm/backbone.pkl",
     output:
-        data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/original_test.h5",
-        data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/additional_test.h5",
+        data_dir / "{project_name}/{mode}{gen}_{dope}_seed_{seed}_fold_{fold}/original_test.h5",
+        data_dir / "{project_name}/{mode}{gen}_{dope}_seed_{seed}_fold_{fold}/additional_test.h5",
     params:
         output_dir=data_dir,
         n_sig=90_000,
         n_bkg=1000_000,
         num_folds=config["num_folds"],
-        network_name=lambda w: f"{w.gen}_{w.dope}_seed_{w.seed}_fold_{w.fold}",
+        network_name=lambda w: f"{w.mode}{w.gen}_{w.dope}_seed_{w.seed}_fold_{w.fold}",
         bkg_file=lambda w: "clustered_herwig_bkg.h5" if w.gen == "herwig" else "clustered_pythia_bkg.h5",
-        extra_test=lambda w: "clustered_pythia_bkg.h5" if w.gen == "herwig" else "clustered_herwig_bkg.h5"
+        extra_test=lambda w: "clustered_pythia_bkg.h5" if w.gen == "herwig" else "clustered_herwig_bkg.h5",
+        backbone_path = lambda w: "" if w.mode == "un_pretrained_" else f"model.backbone_path={data_dir}/{project_name}/ssfm/backbone.pkl"
     resources:
         slurm_partition="shared-gpu,private-dpnc-gpu",
         runtime=60 * 12,
         cpus_per_task=6,
-
         slurm_extra="--gres=gpu:1 --constraint=COMPUTE_TYPE_AMPERE",
     shell:
         """
@@ -106,7 +106,6 @@ rule train_and_save_predictions:
         output_dir={params.output_dir} \
         project_name={wildcards.project_name} \
         seed={wildcards.seed} \
-        model.backbone_path={input.backbone_path} \
         datamodule.n_sig={params.n_sig} \
         datamodule.n_bkg={params.n_bkg} \
         datamodule.n_dope={wildcards.dope} \
@@ -115,6 +114,7 @@ rule train_and_save_predictions:
         datamodule.bkg_file={params.bkg_file} \
         datamodule.sig_file=clustered_pythia_sig.h5 \
         datamodule.extra_test={params.extra_test} \
+        {params.backbone_path} \
         """
 
 

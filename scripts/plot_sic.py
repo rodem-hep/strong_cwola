@@ -47,6 +47,12 @@ def parse_args():
         default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/lowstrongcwola_pipeline/",
     )
     parser.add_argument(
+        "--output",
+        type=Path,
+        help="The output file to produce.",
+        default="/srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/lowstrongcwola_pipeline/sic.png",
+    )
+    parser.add_argument(
         "--pattern",
         type=str,
         help="search string for folders",
@@ -121,7 +127,7 @@ def main() -> None:
     axis.set_ylim(bottom=0)
     axis.set_xlabel("1 / FPR")
     axis.set_ylabel("SIC")
-    fig.savefig(args.data_dir / "sic.png")
+    fig.savefig(args.output)
     plt.close()
 
 
