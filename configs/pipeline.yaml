@@ -1,5 +1,5 @@
 data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
-container: /home/users/l/leighm/scratch/images/jetssl-lite_master.sif
+container: /srv/beegfs/scratch/groups/rodem/containers/jetssl-lite_master.sif
 project_name: lowstrongcwola_pipeline_small
 
 raw_files:
@@ -16,7 +16,8 @@ num_folds: 5 # At least 3 for train/val/test
 num_seeds: 2 # At least 2 for mean/std calculation
 dope:
   - 0
-  # - 100
-  # - 500
+  - 100
+  - 500
   - 1000
+  - 3000
 

@@ -80,8 +80,8 @@ rule train_and_save_predictions:
     input:
         data_dir / "clustered_pythia_sig.h5",
         lambda w: data_dir / ("clustered_herwig_bkg.h5" if w.gen == "herwig" else "clustered_pythia_bkg.h5"),
-        data_dir / "{project_name}/ssfm/backbone.pkl",
         data_dir / "{project_name}/ssfm/done.txt",
+        backbone_path = data_dir / "{project_name}/ssfm/backbone.pkl",
     output:
         data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/original_test.h5",
         data_dir / "{project_name}/{gen}_{dope}_seed_{seed}_fold_{fold}/additional_test.h5",
@@ -106,7 +106,7 @@ rule train_and_save_predictions:
         output_dir={params.output_dir} \
         project_name={wildcards.project_name} \
         seed={wildcards.seed} \
-        model.backbone_path={params.output_dir}/{wildcards.project_name}/ssfm/backbone.pkl \
+        model.backbone_path={input.backbone_path} \
         datamodule.n_sig={params.n_sig} \
         datamodule.n_bkg={params.n_bkg} \
         datamodule.n_dope={wildcards.dope} \

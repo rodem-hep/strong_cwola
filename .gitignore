@@ -15,6 +15,7 @@ user**/**
 *.pytest
 .config/
 .nv/
+.venv/
 
 # Anything with cache in the name, pytest, ruff, or wandb...
 *cache*
