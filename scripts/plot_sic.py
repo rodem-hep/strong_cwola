@@ -34,7 +34,9 @@ def get_sic(
 
 def folder_split(folder_path: Path) -> tuple:
     """Split the folder name into the generation, dope, and seed."""
-    gen, dope, _, seed, _ = folder_path.name.split("_")
+    gen = "herwig" if "herwig" in folder_path.name else "pythia"
+    folder_path = folder_path.name.split(f"{gen}_")[1]
+    dope, _, seed, _ = folder_path.split("_")
     return (gen, int(dope), int(seed))
 
 
@@ -103,7 +105,7 @@ def main() -> None:
     combined = combined.groupby(level=[0, 1]).agg(["mean", "std"])
 
     # colours - based on n_dope
-    colours = {0: "k", 100: "m", 500: "g", 1000: "r"}
+    colours = {0: "k", 1000: "r", 3000: "g", 5000: "b"}
 
     # Plot the SIC
     log.info("Plotting the SIC")

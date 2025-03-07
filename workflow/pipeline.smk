@@ -51,6 +51,8 @@ rule plot_sic:
         data_dir / "{project_name}/{mode}sic.pdf"
     params:
         data_dir = data_dir / f"{project_name}",
+    resources:
+        runtime=5,
     shell:
         "python scripts/plot_sic.py --data_dir={params.data_dir} --output={output}"
 

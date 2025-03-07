@@ -1,6 +1,6 @@
 data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
 container: /srv/beegfs/scratch/groups/rodem/containers/jetssl-lite_master.sif
-project_name: lowstrongcwola_pipeline_small
+project_name: lowstrongcwola_pipeline_correct
 
 raw_files:
   pythia: events_anomalydetection_v2.h5
@@ -13,11 +13,12 @@ event_id_start:
   herwig_bkg: 2000_000
 
 num_folds: 5 # At least 3 for train/val/test
-num_seeds: 1 # At least 2 for mean/std calculation
+num_seeds: 5 # At least 2 for mean/std calculation
 dope:
   - 0
   # - 100
   # - 500
   # - 1000
   - 3000
+  - 5000
 
