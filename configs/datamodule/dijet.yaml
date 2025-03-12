@@ -4,7 +4,8 @@ data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
 sig_file: clustered_pythia_sig.h5
 bkg_file: clustered_pythia_bkg.h5
 extra_test: clustered_herwig_bkg.h5
-mjj_window: [3300, 3700]
+# mjj_window: [3300, 3700]
+mjj_window: [2900, 4100]
 n_sig: 97_000 # Must not exceed 97k as the bottom 3k are reserved for doping
 n_bkg: 1000_000
 n_dope: 1000 # Must not exceed 3k as the top 97k are reserved for signal

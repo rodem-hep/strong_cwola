@@ -60,6 +60,12 @@ def parse_args():
         help="search string for folders",
         default="*_*_seed_*_combined",
     )
+    # Add an argument for if is pretrained or not
+    parser.add_argument(
+        "--pretrained",
+        action="store_true",
+        help="If the model is pretrained or not",
+    )
     return parser.parse_args()
 
 
@@ -68,6 +74,11 @@ def main() -> None:
 
     log.info(f"Searching for folders matching pattern: {args.pattern}")
     folders = list(Path(args.data_dir).glob(args.pattern))
+    # Split into paths containg "un_pretrained" and those that don't
+    if args.pretrained:
+        folders = [f for f in folders if "un_pretrained" not in f.name]
+    else:
+        folders = [f for f in folders if "un_pretrained" in f.name]
     log.info(f"Found {len(folders)} folders")
 
     # Sort the folders alphabetically
@@ -105,7 +116,7 @@ def main() -> None:
     combined = combined.groupby(level=[0, 1]).agg(["mean", "std"])
 
     # colours - based on n_dope
-    colours = {0: "k", 1000: "r", 3000: "g", 5000: "b"}
+    colours = {0: "k", 1000: "r", 3000: "g", 5000: "r"}
 
     # Plot the SIC
     log.info("Plotting the SIC")

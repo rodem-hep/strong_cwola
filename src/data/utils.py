@@ -92,8 +92,9 @@ def load_dijet_file(
                 data[key] = f[key][:n_events, :n_csts].astype(np.float32)
             else:
                 data[key] = f[key][:n_events].astype(np.float32)
-    mask = get_mass_mask(data["mjj"], mjj_window).reshape(-1)
-    data = {k: v[mask] for k, v in data.items()}
+    if mjj_window is not None:
+        mask = get_mass_mask(data["mjj"], mjj_window).reshape(-1)
+        data = {k: v[mask] for k, v in data.items()}
 
     # Combine the constituents and jets into a single array
     combine_csts_and_jets(data)

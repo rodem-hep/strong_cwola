@@ -37,7 +37,9 @@ gen_dope = [f"pythia_{dope}" for dope in config["dope"]] + ["herwig_0"]
 
 rule all:
     input:
-        expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
+        # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
+        expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
+        data_dir / f"{project_name}/low_level_data.pdf",
 
 rule plot_sic:
     input:
@@ -47,14 +49,16 @@ rule plot_sic:
             seed=seeds,
             file=["pythia", "herwig"],
         ),
+        "scripts/plot_sic.py",
     output:
         data_dir / "{project_name}/{mode}sic.pdf"
     params:
         data_dir = data_dir / f"{project_name}",
+        pretrained = lambda w: "" if w.mode == "un_pretrained_" else "--pretrained",
     resources:
         runtime=5,
     shell:
-        "python scripts/plot_sic.py --data_dir={params.data_dir} --output={output}"
+        "python scripts/plot_sic.py --data_dir={params.data_dir} --output={output} {params.pretrained}"
 
 
 rule combine_folds:
@@ -144,6 +148,26 @@ rule pretrain:
         network_name=ssfm \
         output_dir={params.output_dir} \
         project_name={wildcards.project_name} \
+        """
+
+
+# TODO: load more events, set mjj window, etc. Possibly broaded mjj window again?
+rule plot_data:
+    """Plot the data for the given gen."""
+    input:
+        signal = data_dir / "clustered_pythia_sig.h5",
+        bkg = data_dir / "clustered_pythia_bkg.h5",
+        simulation = data_dir / "clustered_herwig_bkg.h5",
+        script = "scripts/compare_data.py",
+    output:
+        data_dir / "{project_name}/low_level_data.pdf",
+    shell:
+        """
+        python {input.script} \
+        --signal={input.signal} \
+        --bkg={input.bkg} \
+        --simulation={input.simulation} \
+        --output={output}
         """
 
 
