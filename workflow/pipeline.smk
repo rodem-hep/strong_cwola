@@ -38,8 +38,9 @@ gen_dope = [f"pythia_{dope}" for dope in config["dope"]] + ["herwig_0"]
 rule all:
     input:
         # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
-        expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
-        data_dir / f"{project_name}/low_level_data.pdf",
+        # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
+        # data_dir / f"{project_name}/low_level_data.pdf",
+        data_dir / f"{project_name}/bdt_sic.pdf"
 
 rule plot_sic:
     input:
@@ -151,7 +152,64 @@ rule pretrain:
         """
 
 
-# TODO: load more events, set mjj window, etc. Possibly broaded mjj window again?
+rule plot_sic_bdt:
+    input:
+        expand(
+            data_dir / project_name / "bdt_{gen_dope}_seed_{seed}/{file}.h5",
+            gen_dope=gen_dope,
+            seed=seeds,
+            file=["pythia", "herwig"],
+        ),
+        "scripts/plot_sic.py",
+    output:
+        data_dir / f"{project_name}/bdt_sic.pdf"
+    params:
+        data_dir = data_dir / f"{project_name}",
+    resources:
+        runtime=5,
+    shell:
+        "python scripts/plot_sic.py --data_dir={params.data_dir} --output={output} --is_bdt --pattern=bdt_*"
+
+
+
+rule train_bdts:
+    """Train BDTs on the high level features."""
+    input:
+        data_dir / "clustered_pythia_bkg.h5",
+        data_dir / "clustered_herwig_bkg.h5",
+        signal = data_dir / "clustered_pythia_sig.h5",
+        script = "scripts/train_bdt.py",
+    output:
+        data_dir / project_name / "bdt_{gen}_{dope}_seed_{seed}/pythia.h5",
+        data_dir / project_name / "bdt_{gen}_{dope}_seed_{seed}/herwig.h5",
+    params:
+        n_sig=90_000,
+        n_bkg=1000_000,
+        num_folds=config["num_folds"],
+        bkg_file=lambda w: f"{data_dir}/clustered_herwig_bkg.h5" if w.gen == "herwig" else f"{data_dir}/clustered_pythia_bkg.h5",
+        extra_test=lambda w: f"{data_dir}/clustered_pythia_bkg.h5" if w.gen == "herwig" else f"{data_dir}/clustered_herwig_bkg.h5",
+        train_out=lambda w: data_dir / project_name / f"bdt_{w.gen}_{w.dope}_seed_{w.seed}/{w.gen}.h5",
+        additional_out=lambda w: data_dir / project_name / f"bdt_{w.gen}_{w.dope}_seed_{w.seed}/{'herwig' if w.gen == 'pythia' else 'pythia'}.h5",
+    resources:
+        mem_mb=30_000,
+    shell:
+        """
+        python scripts/train_bdt.py \
+        --background {params.bkg_file} \
+        --signal {input.signal} \
+        --add_test {params.extra_test} \
+        --seed {wildcards.seed} \
+        --n_dope {wildcards.dope} \
+        --num_folds {params.num_folds} \
+        --n_sig {params.n_sig} \
+        --n_bkg {params.n_bkg} \
+        --num_ensemble 1 \
+        --train_out {params.train_out} \
+        --additional_out {params.additional_out} \
+        """
+# TODO update num_ensemble to 50!!
+
+
 rule plot_data:
     """Plot the data for the given gen."""
     input:

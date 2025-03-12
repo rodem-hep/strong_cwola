@@ -36,7 +36,7 @@ def folder_split(folder_path: Path) -> tuple:
     """Split the folder name into the generation, dope, and seed."""
     gen = "herwig" if "herwig" in folder_path.name else "pythia"
     folder_path = folder_path.name.split(f"{gen}_")[1]
-    dope, _, seed, _ = folder_path.split("_")
+    dope, _, seed = folder_path.split("_")[:3]
     return (gen, int(dope), int(seed))
 
 
@@ -66,6 +66,12 @@ def parse_args():
         action="store_true",
         help="If the model is pretrained or not",
     )
+    # Add an argument for if it uses bdts or not
+    parser.add_argument(
+        "--is_bdt",
+        action="store_true",
+        help="If the model is pretrained or not",
+    )
     return parser.parse_args()
 
 
@@ -75,10 +81,14 @@ def main() -> None:
     log.info(f"Searching for folders matching pattern: {args.pattern}")
     folders = list(Path(args.data_dir).glob(args.pattern))
     # Split into paths containg "un_pretrained" and those that don't
-    if args.pretrained:
-        folders = [f for f in folders if "un_pretrained" not in f.name]
+    if args.is_bdt:
+        folders = [f for f in folders if "bdt_" in f.name]
     else:
-        folders = [f for f in folders if "un_pretrained" in f.name]
+        folders = [f for f in folders if "bdt_" not in f.name]
+        if args.pretrained:
+            folders = [f for f in folders if "un_pretrained" not in f.name]
+        else:
+            folders = [f for f in folders if "un_pretrained" in f.name]
     log.info(f"Found {len(folders)} folders")
 
     # Sort the folders alphabetically

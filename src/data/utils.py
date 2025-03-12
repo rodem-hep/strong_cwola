@@ -125,3 +125,12 @@ def load_strong_cwola_data(
     return {
         k: np.concat([bkg_data[k], sig_data[k], dope_data[k]], axis=0) for k in bkg_data
     }
+
+
+def get_hlf(data: np.array) -> np.array:
+    """Get the high level features from the data."""
+    mass = data[:, 3]
+    taus = data[:, -3:]
+    tau_21 = taus[:, 1] / (taus[:, 0] + 1e-6)
+    tau_32 = taus[:, 2] / (taus[:, 1] + 1e-6)
+    return np.stack([mass, tau_21, tau_32], axis=1)
