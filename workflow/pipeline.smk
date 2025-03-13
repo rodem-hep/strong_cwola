@@ -188,8 +188,8 @@ rule train_bdts:
         num_folds=config["num_folds"],
         bkg_file=lambda w: f"{data_dir}/clustered_herwig_bkg.h5" if w.gen == "herwig" else f"{data_dir}/clustered_pythia_bkg.h5",
         extra_test=lambda w: f"{data_dir}/clustered_pythia_bkg.h5" if w.gen == "herwig" else f"{data_dir}/clustered_herwig_bkg.h5",
-        train_out=lambda w: data_dir / project_name / f"bdt_{w.gen}_{w.dope}_seed_{w.seed}/{w.gen}.h5",
-        additional_out=lambda w: data_dir / project_name / f"bdt_{w.gen}_{w.dope}_seed_{w.seed}/{'herwig' if w.gen == 'pythia' else 'pythia'}.h5",
+        output_dir = lambda w: data_dir / project_name / f"bdt_{w.gen}_{w.dope}_seed_{w.seed}",
+        is_herwig=lambda w: "--is_herwig" if w.gen == "herwig" else "",
     resources:
         mem_mb=30_000,
     shell:
@@ -203,9 +203,9 @@ rule train_bdts:
         --num_folds {params.num_folds} \
         --n_sig {params.n_sig} \
         --n_bkg {params.n_bkg} \
-        --num_ensemble 1 \
-        --train_out {params.train_out} \
-        --additional_out {params.additional_out} \
+        --num_ensemble 50 \
+        --output_dir {params.output_dir} \
+        {params.is_herwig}
         """
 # TODO update num_ensemble to 50!!
 

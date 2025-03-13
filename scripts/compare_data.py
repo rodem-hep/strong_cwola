@@ -1,15 +1,15 @@
 import argparse
 import logging
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-
 import rootutils
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
 from mltools.mltools.plotting import plot_multi_hists
-from src.data.utils import load_dijet_file, get_hlf
+from src.data.utils import get_hlf, load_dijet_file
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
@@ -73,8 +73,7 @@ def main() -> None:
     j1_hl = {}
     j2_hl = {}
     for name, file in zip(
-        ["Pythia", "Herwig", "Signal"], 
-        [args.bkg, args.simulation, args.signal]
+        ["Pythia", "Herwig", "Signal"], [args.bkg, args.simulation, args.signal]
     ):
         data = load_dijet_file(
             file,

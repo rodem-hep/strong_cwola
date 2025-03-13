@@ -127,6 +127,7 @@ def main() -> None:
 
     # colours - based on n_dope
     colours = {0: "k", 1000: "r", 3000: "g", 5000: "r"}
+    linestyle = {"Herwig": "dashed", "Pythia": "solid"}
 
     # Plot the SIC
     log.info("Plotting the SIC")
@@ -134,9 +135,11 @@ def main() -> None:
     for gen, dope in combined.index:
         mean_sics = combined.loc[gen, dope][0::2].values
         mean_stds = combined.loc[gen, dope][1::2].values
-        color = colours[dope] if gen != "herwig" else "b"
-        label = f"{gen} {dope}"
-        axis.plot(x_space, mean_sics, color, label=label)
+        color = colours[dope] if gen != "herwig" else "k"
+        # Capitalise the generator name
+        gen = gen.capitalize()
+        label = f"{gen} {dope}" if gen == "Pythia" else gen
+        axis.plot(x_space, mean_sics, color, label=label, linestyle=linestyle[gen])
         axis.fill_between(
             x_space,
             mean_sics - mean_stds,
@@ -144,7 +147,7 @@ def main() -> None:
             color=color,
             alpha=0.2,
         )
-    axis.legend()
+    axis.legend(frameon=False)
     axis.set_xscale("log")
     axis.set_xlim(x_space[0], x_space[-1])
     axis.set_ylim(bottom=0)

@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import os
 import random
 from pathlib import Path
 
@@ -15,7 +14,7 @@ from tqdm import trange
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
-from src.data.utils import load_dijet_file, get_hlf, load_strong_cwola_data
+from src.data.utils import get_hlf, load_dijet_file, load_strong_cwola_data
 
 log = logging.getLogger(__name__)
 
@@ -93,15 +92,16 @@ def main(cfg) -> None:
     data_dict = load_strong_cwola_data(
         cfg.background,
         cfg.signal,
-        n_bkg=cfg.n_bkg,
-        n_sig=cfg.n_sig,
-        n_dope=cfg.n_dope,
         mjj_window=[2900, 4100],
-        n_csts=None
+        n_sig=cfg.n_sig,
+        n_bkg=cfg.n_bkg,
+        n_dope=cfg.n_dope,
+        n_csts=None,
     )
     add_test_dict = load_dijet_file(
         cfg.add_test,
-        n_events=None,
+        mjj_window=[2900, 4100],
+        n_events=cfg.n_bkg,
         n_csts=None,
     )
     # Grab the relevant components
@@ -120,14 +120,17 @@ def main(cfg) -> None:
     # Preprocess everything
     scaler = MinMaxScaler()
     data = scaler.fit_transform(data)
+    add_test = scaler.transform(add_test)
     # Make an array to fill with predictions
     predictions = np.zeros(len(data))
     add_predictions = np.zeros((len(add_test), cfg.num_folds))
     for fold_idx in range(cfg.num_folds):
         log.info(f"Starting fold {fold_idx}")
 
-        # Split the data from the signal region using the fold_idx, only return the index
-        indx_train, indx_test = k_fold_split(np.arange(len(data)), cfg.num_folds, fold_idx)
+        # Split the data from the signal region using the fold_idx
+        indx_train, indx_test = k_fold_split(
+            np.arange(len(data)), cfg.num_folds, fold_idx
+        )
 
         # Train an ensemble of decision trees
         log.info("- training ensemble")
@@ -144,29 +147,38 @@ def main(cfg) -> None:
         predictions[indx_test] = preds
         add_predictions[:, fold_idx] = add_preds
 
+    # Split out background and signal predictions
+    bkg_preds = predictions[true_labels == 0]
+    sig_preds = predictions[true_labels == 1]
+    # Pick one of the folds randomly to assign a score to the additional test set
     add_preds = add_predictions[
-            np.arange(len(add_predictions)),
-            np.random.randint(cfg.num_folds, size=len(add_predictions)),
+        np.arange(len(add_predictions)),
+        np.random.randint(cfg.num_folds, size=len(add_predictions)),
     ]
+
+    # Build the pythia and herwig predictions
+    if cfg.is_herwig:
+        pythia_preds = add_preds
+        herwig_preds = bkg_preds
+    else:
+        pythia_preds = bkg_preds
+        herwig_preds = add_preds
+    predictions = np.concatenate((pythia_preds, sig_preds))
+    sv_labels = np.concatenate((np.zeros(len(pythia_preds)), np.ones(len(sig_preds))))
     log.info("Saving the data")
+
     # Save as the dataframe with labels, predictions and is_pythia columns
-    df = pd.DataFrame(
-        {
-            "outputs": predictions,
-            "labels": true_labels,
-            "is_pythia": np.ones(len(data)) * ("pythia" in cfg.background.name),
-        }
-    )
-    df.to_hdf(cfg.train_out, key="data", mode="w")
+    pd.DataFrame({
+        "outputs": predictions,
+        "labels": sv_labels,
+        "is_pythia": np.ones(len(predictions)),
+    }).to_hdf(cfg.output_dir / "pythia.h5", key="data", mode="w")
     # Save the additional test set
-    df = pd.DataFrame(
-        {
-            "outputs": add_preds,
-            "labels": np.zeros(len(add_test)),
-            "is_pythia": np.ones(len(add_test)) * ("pythia" in cfg.add_test.name),
-        }
-    )
-    df.to_hdf(cfg.additional_out, key="data", mode="w")
+    pd.DataFrame({
+        "outputs": herwig_preds,
+        "labels": np.zeros(len(herwig_preds)),
+        "is_pythia": np.zeros(len(herwig_preds)),
+    }).to_hdf(cfg.output_dir / "herwig.h5", key="data", mode="w")
 
     log.info("All done.")
 
@@ -199,10 +211,24 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_ensemble", type=int, required=True, help="Number of ensemble classifiers"
     )
-    parser.add_argument("--train_out", type=Path, help="Where to save predictions on background and signal.")
-    parser.add_argument("--additional_out", type=Path, help="Where to save predictions on the additional test set.")
-    parser.add_argument("--n_sig", type=int, help="Number of signal to use when doping.")
-    parser.add_argument("--n_bkg", type=int, help="Number of background to use when doping.")
-    parser.add_argument("--n_dope", type=int, help="Number of signal to use when doping.")
+    parser.add_argument(
+        "--output_dir",
+        type=Path,
+        help="Where to save predictions on background and signal.",
+    )
+    parser.add_argument(
+        "--n_sig", type=int, help="Number of signal to use when doping."
+    )
+    parser.add_argument(
+        "--n_bkg", type=int, help="Number of background to use when doping."
+    )
+    parser.add_argument(
+        "--n_dope", type=int, help="Number of signal to use when doping."
+    )
+    parser.add_argument(
+        "--is_herwig",
+        action="store_true",
+        help="Flag to indicate if Herwig data is used.",
+    )
     args = parser.parse_args()
     main(args)
