@@ -66,8 +66,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    # Set up some plotting defaults
     # Set the color cylce
     plt.style.use("tableau-colorblind10")
+    # Increase the font size
+    plt.rcParams.update({"font.size": 14})
+
     # Load the data
     csts = {}
     j1_hl = {}
@@ -90,18 +94,22 @@ def main() -> None:
         j1_hl[name] = get_hlf(j1)
         j2_hl[name] = get_hlf(j2)
 
-    # # Constituents
-    # plot_multi_hists(
-    #     list(csts.values()),
-    #     list(csts.keys()),
-    #     [r"$p_{\mathrm{T}}$", r"$\Delta\eta$", r"$\Delta\phi$"],
-    #     # ["Pt", "Eta", "Phi"],
-    #     path=args.output,
-    #     logy=True,
-    #     bins=50,
-    # )
+    # Legend placement
+    legend_kwargs = {"loc": "upper right"}
+
+    # Constituents
+    plot_multi_hists(
+        list(csts.values()),
+        list(csts.keys()),
+        [r"$p_{\mathrm{T}}$", r"$\Delta\eta$", r"$\Delta\phi$"],
+        # ["Pt", "Eta", "Phi"],
+        path=args.output,
+        logy=True,
+        bins=50,
+        legend_kwargs=legend_kwargs,
+    )
     # High level features
-    for i, (jet_nm, jet) in enumerate(zip(["jet1", "jet2"], [j1_hl, j2_hl])):
+    for i, (jet_nm, jet) in enumerate(zip(["jet1", "jet2"], [j1_hl, j2_hl]), start=1):
         plot_multi_hists(
             list(jet.values()),
             list(jet.keys()),
@@ -109,6 +117,7 @@ def main() -> None:
             path=args.output.parent / f"{jet_nm}.pdf",
             logy=True,
             bins=50,
+            legend_kwargs=legend_kwargs,
         )
 
 

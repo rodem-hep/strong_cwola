@@ -37,9 +37,9 @@ gen_dope = [f"pythia_{dope}" for dope in config["dope"]] + ["herwig_0"]
 
 rule all:
     input:
-        # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
+        expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
         # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
-        # data_dir / f"{project_name}/low_level_data.pdf",
+        data_dir / f"{project_name}/low_level_data.pdf",
         data_dir / f"{project_name}/bdt_sic.pdf"
 
 rule plot_sic:
@@ -207,7 +207,6 @@ rule train_bdts:
         --output_dir {params.output_dir} \
         {params.is_herwig}
         """
-# TODO update num_ensemble to 50!!
 
 
 rule plot_data:

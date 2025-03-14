@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rootutils
+from matplotlib import ticker
 from scipy.interpolate import interp1d
 from sklearn.metrics import roc_curve
 
@@ -103,7 +104,7 @@ def main() -> None:
     ]
 
     log.info("Calculating the SIC for pythia samples")
-    x_space = 10 ** (np.linspace(1, 5, 500))
+    x_space = 10 ** (np.linspace(1, 4, 500))
     test_sics = [
         get_sic(
             d["labels"][d["is_pythia"] == 1],
@@ -126,8 +127,23 @@ def main() -> None:
     combined = combined.groupby(level=[0, 1]).agg(["mean", "std"])
 
     # colours - based on n_dope
-    colours = {0: "k", 1000: "r", 3000: "g", 5000: "r"}
-    linestyle = {"Herwig": "dashed", "Pythia": "solid"}
+    # Set the style
+    plt.style.use("tableau-colorblind10")
+    # Get the first two colors from the color cycle
+    dfc = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colours = {0: "k", 1700: dfc[0], 5_000: dfc[1], 10_000: dfc[2]}
+    # linestyle - based on generator
+    linestyle = {"herwig": "dashed", "pythia": "solid"}
+    # Define a label map
+    label_map = {
+        "herwig 0": "Herwig",
+        "pythia 0": "Data proxy",
+        "ptyhia 1700": "sCWoLa 1700",
+        "pythia 5000": "sCWoLa 5000",
+    }
+
+    # Increase the font size
+    plt.rcParams.update({"font.size": 18})
 
     # Plot the SIC
     log.info("Plotting the SIC")
@@ -135,11 +151,15 @@ def main() -> None:
     for gen, dope in combined.index:
         mean_sics = combined.loc[gen, dope][0::2].values
         mean_stds = combined.loc[gen, dope][1::2].values
-        color = colours[dope] if gen != "herwig" else "k"
+        color = colours[dope]
         # Capitalise the generator name
-        gen = gen.capitalize()
-        label = f"{gen} {dope}" if gen == "Pythia" else gen
-        axis.plot(x_space, mean_sics, color, label=label, linestyle=linestyle[gen])
+        axis.plot(
+            x_space,
+            mean_sics,
+            color,
+            label=label_map[f"{gen} {dope}"],
+            linestyle=linestyle[gen],
+        )
         axis.fill_between(
             x_space,
             mean_sics - mean_stds,
@@ -147,13 +167,20 @@ def main() -> None:
             color=color,
             alpha=0.2,
         )
-    axis.legend(frameon=False)
+    # Plot the legend in the top left corner
+    axis.legend(frameon=False, loc="upper left")
     axis.set_xscale("log")
     axis.set_xlim(x_space[0], x_space[-1])
-    axis.set_ylim(bottom=0)
-    axis.set_xlabel("1 / FPR")
-    axis.set_ylabel("SIC")
-    fig.savefig(args.output)
+    axis.set_ylim(0, 60)
+    axis.set_xlabel(r"Rejection $(1/\epsilon_b)$")
+    axis.set_ylabel("Significance improvement (SIC)")
+    # Add a grid with x-axis points only every 10^i
+    axis.set_xticks([10**i for i in range(1, 5)])
+    axis.xaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=5))
+    axis.xaxis.set_minor_locator(ticker.NullLocator())
+    axis.grid(True, which="both", linestyle="--", alpha=0.5)
+    # Save the figure
+    fig.savefig(args.output, bbox_inches="tight")
     plt.close()
 
 
