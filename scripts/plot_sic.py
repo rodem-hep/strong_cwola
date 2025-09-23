@@ -16,6 +16,15 @@ root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
+# Some defaults for my plots to make them look nicer
+plt.rcParams["xaxis.labellocation"] = "right"
+plt.rcParams["yaxis.labellocation"] = "top"
+plt.rcParams["legend.edgecolor"] = "1"
+plt.rcParams["legend.framealpha"] = 0.0
+plt.rcParams["axes.labelsize"] = "large"
+plt.rcParams["axes.titlesize"] = "large"
+plt.rcParams["legend.fontsize"] = 11
+
 
 def get_sic(
     labels: np.ndarray,
@@ -61,6 +70,12 @@ def parse_args():
         help="search string for folders",
         default="*_*_seed_*_combined",
     )
+    parser.add_argument(
+        "--ignore_pattern",
+        type=str,
+        help="search string for folders",
+        default="3000",
+    )
     # Add an argument for if is pretrained or not
     parser.add_argument(
         "--pretrained",
@@ -90,6 +105,8 @@ def main() -> None:
             folders = [f for f in folders if "un_pretrained" not in f.name]
         else:
             folders = [f for f in folders if "un_pretrained" in f.name]
+    # Drop any folders whos lowest level contains the ignore pattern
+    folders = [f for f in folders if args.ignore_pattern not in f.name]
     log.info(f"Found {len(folders)} folders")
 
     # Sort the folders alphabetically
@@ -136,9 +153,9 @@ def main() -> None:
     linestyle = {"herwig": "dashed", "pythia": "solid"}
     # Define a label map
     label_map = {
-        "herwig 0": "Herwig",
-        "pythia 0": "Data proxy",
-        "ptyhia 1700": "sCWoLa 1700",
+        "herwig 0": "Simulation proxy",
+        "pythia 0": "sCWoLa 0",
+        "pythia 1700": "sCWoLa 1700",
         "pythia 5000": "sCWoLa 5000",
     }
 
@@ -147,7 +164,10 @@ def main() -> None:
 
     # Plot the SIC
     log.info("Plotting the SIC")
-    fig, axis = plt.subplots(1, 1, figsize=(8, 6))
+    fig, (axis, ratio_axis) = plt.subplots(2, 1, figsize=(8, 12), gridspec_kw={'height_ratios': [3, 1]})
+    pythia_0_sics = combined.loc["pythia", 0][0::2].values
+    pythia_0_stds = combined.loc["pythia", 0][1::2].values
+
     for gen, dope in combined.index:
         mean_sics = combined.loc[gen, dope][0::2].values
         mean_stds = combined.loc[gen, dope][1::2].values
@@ -167,6 +187,24 @@ def main() -> None:
             color=color,
             alpha=0.2,
         )
+
+        # Calculate the ratio and plot it
+        ratio = mean_sics / pythia_0_sics
+        ratio_uncertainty = ratio * np.sqrt((mean_stds / mean_sics) ** 2 + (pythia_0_stds / pythia_0_sics) ** 2)
+        ratio_axis.plot(
+            x_space,
+            ratio,
+            color,
+            linestyle=linestyle[gen],
+        )
+        ratio_axis.fill_between(
+            x_space,
+            ratio - ratio_uncertainty,
+            ratio + ratio_uncertainty,
+            color=color,
+            alpha=0.2,
+        )
+
     # Plot the legend in the top left corner
     axis.legend(frameon=False, loc="upper left")
     axis.set_xscale("log")
@@ -179,6 +217,18 @@ def main() -> None:
     axis.xaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=5))
     axis.xaxis.set_minor_locator(ticker.NullLocator())
     axis.grid(True, which="both", linestyle="--", alpha=0.5)
+
+    # Configure the ratio plot
+    ratio_axis.set_xscale("log")
+    ratio_axis.set_xlim(x_space[0], x_space[-1])
+    ratio_axis.set_ylim(0.8, 1.1)
+    ratio_axis.set_xlabel(r"Rejection $(1/\epsilon_b)$")
+    ratio_axis.set_ylabel(f"Ratio to\n{label_map['pythia 0']}")
+    ratio_axis.set_xticks([10**i for i in range(1, 5)])
+    ratio_axis.xaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=5))
+    ratio_axis.xaxis.set_minor_locator(ticker.NullLocator())
+    ratio_axis.grid(True, which="both", linestyle="--", alpha=0.5)
+
     # Save the figure
     fig.savefig(args.output, bbox_inches="tight")
     plt.close()
