@@ -1,7 +1,7 @@
 data_dir: /srv/beegfs/scratch/groups/rodem/LHCO/strong_cwola/
 container: /srv/beegfs/scratch/groups/rodem/containers/jetssl-lite_master.sif
 # project_name: lowstrongcwola_pipeline_correct
-project_name: lowstrongcwola_wide_mjj
+project_name: stephen_test_lowstrongcwola_wide_mjj
 
 raw_files:
   pythia: events_anomalydetection_v2.h5

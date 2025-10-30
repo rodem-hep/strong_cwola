@@ -23,7 +23,19 @@ plt.rcParams["legend.edgecolor"] = "1"
 plt.rcParams["legend.framealpha"] = 0.0
 plt.rcParams["axes.labelsize"] = "large"
 plt.rcParams["axes.titlesize"] = "large"
-plt.rcParams["legend.fontsize"] = 11
+plt.rcParams["legend.fontsize"] = 21
+
+
+def get_signal_efficiency(
+    labels: np.ndarray,
+    predictions: np.ndarray,
+    background_rejection: float,
+) -> float:
+    """Calculate the signal efficiency at a given background rejection."""
+    fpr, tpr, _ = roc_curve(labels, predictions)  # Get the ROC curve
+    # Interpolate to get the signal efficiency at the given background rejection
+    target_fpr = 1 - background_rejection
+    return interp1d(fpr, tpr, kind="linear", fill_value="extrapolate")(target_fpr)
 
 
 def get_sic(
@@ -131,6 +143,44 @@ def main() -> None:
         for d in dataframes
     ]
 
+    log.info("Calculating the signal efficiencies at 99% background rejection")
+    test_sig_effs = [
+        get_signal_efficiency(
+            d["labels"][d["is_pythia"] == 1],
+            d["outputs"][d["is_pythia"] == 1],
+            0.99,
+        )
+        for d in dataframes
+    ]
+
+    # Create a mapping for signal efficiencies to identify configurations
+    log.info("Creating signal efficiency mapping")
+    sig_eff_mapping = {}
+    for i, folder in enumerate(folders):
+        gen, dope, seed = folder_split(folder)
+        if (gen, dope) not in sig_eff_mapping:
+            sig_eff_mapping[gen, dope] = []
+        sig_eff_mapping[gen, dope].append(test_sig_effs[i])
+
+    # Calculate mean and std for each configuration
+    sig_eff_stats = {}
+    for key, values in sig_eff_mapping.items():
+        sig_eff_stats[key] = {
+            "mean": np.mean(values),
+            "std": np.std(values),
+            "values": values,
+        }
+    # write stats to text file
+    with open(args.output.parent / f"{args.output.stem}_sig_eff_stats.txt", "w") as f:
+        f.write("Signal efficiency at 99% background rejection:\n")
+        for (gen, dope), stats in sig_eff_stats.items():
+            f.write(f"{gen} {dope}: {stats['mean']:.4f} ± {stats['std']:.4f}\n")
+        f.write("\nSignal efficiency gain relative to herwig 0:\n")
+        herwig_0_mean = sig_eff_stats["herwig", 0]["mean"]
+        for (gen, dope), stats in sig_eff_stats.items():
+            gain = stats["mean"] / herwig_0_mean - 1
+            f.write(f"{gen} {dope}: {gain * 100:.2f} %\n")
+
     # Put it all in one dataframe
     log.info("Combining SIC scores into single dataframe")
     combined = {}
@@ -164,7 +214,9 @@ def main() -> None:
 
     # Plot the SIC
     log.info("Plotting the SIC")
-    fig, (axis, ratio_axis) = plt.subplots(2, 1, figsize=(8, 12), gridspec_kw={'height_ratios': [3, 1]})
+    fig, (axis, ratio_axis) = plt.subplots(
+        2, 1, figsize=(8, 12), gridspec_kw={"height_ratios": [3, 1]}
+    )
     pythia_0_sics = combined.loc["pythia", 0][0::2].values
     pythia_0_stds = combined.loc["pythia", 0][1::2].values
 
@@ -190,7 +242,9 @@ def main() -> None:
 
         # Calculate the ratio and plot it
         ratio = mean_sics / pythia_0_sics
-        ratio_uncertainty = ratio * np.sqrt((mean_stds / mean_sics) ** 2 + (pythia_0_stds / pythia_0_sics) ** 2)
+        ratio_uncertainty = ratio * np.sqrt(
+            (mean_stds / mean_sics) ** 2 + (pythia_0_stds / pythia_0_sics) ** 2
+        )
         ratio_axis.plot(
             x_space,
             ratio,
@@ -231,6 +285,82 @@ def main() -> None:
 
     # Save the figure
     fig.savefig(args.output, bbox_inches="tight")
+    plt.close()
+
+    # repeat plotting but with ratio to herwig 0
+    log.info("Plotting the SIC with ratio to herwig 0")
+    fig, (axis, ratio_axis) = plt.subplots(
+        2, 1, figsize=(8, 12), gridspec_kw={"height_ratios": [3, 1]}
+    )
+    herwig_0_sics = combined.loc["herwig", 0][0::2].values
+    herwig_0_stds = combined.loc["herwig", 0][1::2].values
+
+    for gen, dope in combined.index:
+        mean_sics = combined.loc[gen, dope][0::2].values
+        mean_stds = combined.loc[gen, dope][1::2].values
+        color = colours[dope]
+        # Capitalise the generator name
+        axis.plot(
+            x_space,
+            mean_sics,
+            color,
+            label=label_map[f"{gen} {dope}"],
+            linestyle=linestyle[gen],
+        )
+        axis.fill_between(
+            x_space,
+            mean_sics - mean_stds,
+            mean_sics + mean_stds,
+            color=color,
+            alpha=0.2,
+        )
+
+        # Calculate the ratio and plot it
+        ratio = mean_sics / herwig_0_sics
+        ratio_uncertainty = ratio * np.sqrt(
+            (mean_stds / mean_sics) ** 2 + (herwig_0_stds / herwig_0_sics) ** 2
+        )
+        ratio_axis.plot(
+            x_space,
+            ratio,
+            color,
+            linestyle=linestyle[gen],
+        )
+        ratio_axis.fill_between(
+            x_space,
+            ratio - ratio_uncertainty,
+            ratio + ratio_uncertainty,
+            color=color,
+            alpha=0.2,
+        )
+
+    # Plot the legend in the top left corner
+    axis.legend(frameon=False, loc="upper left")
+    axis.set_xscale("log")
+    axis.set_xlim(x_space[0], x_space[-1])
+    axis.set_ylim(0, 60)
+    axis.set_xlabel(r"Rejection $(1/\epsilon_b)$")
+    axis.set_ylabel("Significance improvement (SIC)")
+    # Add a grid with x-axis points only every 10^i
+    axis.set_xticks([10**i for i in range(1, 5)])
+    axis.xaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=5))
+    axis.xaxis.set_minor_locator(ticker.NullLocator())
+    axis.grid(True, which="both", linestyle="--", alpha=0.5)
+    # Configure the ratio plot
+    ratio_axis.set_xscale("log")
+    ratio_axis.set_xlim(x_space[0], x_space[-1])
+    ratio_axis.set_ylim(0.8, 1.2)
+    ratio_axis.set_xlabel(r"Rejection $(1/\epsilon_b)$")
+    ratio_axis.set_ylabel(f"Ratio to\n{label_map['herwig 0']}")
+    ratio_axis.set_xticks([10**i for i in range(1, 5)])
+    ratio_axis.xaxis.set_major_locator(ticker.LogLocator(base=10.0, numticks=5))
+    ratio_axis.xaxis.set_minor_locator(ticker.NullLocator())
+    ratio_axis.grid(True, which="both", linestyle="--", alpha=0.5)
+    # Save the figure
+    herwig_output = (
+        args.output.parent / f"{args.output.stem}_H_ratio{args.output.suffix}"
+    )
+    fig.savefig(herwig_output, bbox_inches="tight")
     plt.close()
 
 
