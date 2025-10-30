@@ -4,8 +4,8 @@
 verbose: false
 printshellcmds: true
 sdm: apptainer
-executor: slurm
-#executor: local
+#executor: slurm
+executor: local
 jobs: 200 # Maximum number of jobs to run in parallel - all will be run eventually
 default-resources:
   slurm_account: golling

@@ -39,8 +39,28 @@ rule all:
     input:
         expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
         # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
+        expand(data_dir / f"{project_name}/{{mode}}_sig_eff.pdf", mode=["", "un_pretrained_"]),
         data_dir / f"{project_name}/low_level_data.pdf",
         data_dir / f"{project_name}/bdt_sic.pdf"
+
+rule plot_sig_eff:
+    input:
+        expand(
+            data_dir / "{{project_name}}/{{mode}}{gen_dope}_seed_{seed}_combined/{file}.h5",
+            gen_dope=gen_dope,
+            seed=seeds,
+            file=["pythia", "herwig"],
+        ),
+        "scripts/plot_sig_eff.py",
+    output:
+        data_dir / "{project_name}/{mode}_sig_eff.pdf"
+    params:
+        data_dir = data_dir / f"{project_name}",
+        pretrained = lambda w: "" if w.mode == "un_pretrained_" else "--pretrained",
+    resources:
+        runtime=5,
+    shell:
+        "python scripts/plot_sig_eff.py --data_dir={params.data_dir} --output={output} {params.pretrained}"
 
 rule plot_sic:
     input:
