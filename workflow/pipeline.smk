@@ -39,7 +39,7 @@ rule all:
     input:
         expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
         # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
-        expand(data_dir / f"{project_name}/{{mode}}_sig_eff.pdf", mode=["", "un_pretrained_"]),
+        expand(data_dir / f"{project_name}/{{mode}}sig_eff.pdf", mode=["", "un_pretrained_"]),
         data_dir / f"{project_name}/low_level_data.pdf",
         data_dir / f"{project_name}/bdt_sic.pdf"
 
@@ -53,7 +53,7 @@ rule plot_sig_eff:
         ),
         "scripts/plot_sig_eff.py",
     output:
-        data_dir / "{project_name}/{mode}_sig_eff.pdf"
+        data_dir / "{project_name}/{mode}sig_eff.pdf"
     params:
         data_dir = data_dir / f"{project_name}",
         pretrained = lambda w: "" if w.mode == "un_pretrained_" else "--pretrained",

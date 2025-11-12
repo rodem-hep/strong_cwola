@@ -143,44 +143,6 @@ def main() -> None:
         for d in dataframes
     ]
 
-    log.info("Calculating the signal efficiencies at 99% background rejection")
-    test_sig_effs = [
-        get_signal_efficiency(
-            d["labels"][d["is_pythia"] == 1],
-            d["outputs"][d["is_pythia"] == 1],
-            0.99,
-        )
-        for d in dataframes
-    ]
-
-    # Create a mapping for signal efficiencies to identify configurations
-    log.info("Creating signal efficiency mapping")
-    sig_eff_mapping = {}
-    for i, folder in enumerate(folders):
-        gen, dope, seed = folder_split(folder)
-        if (gen, dope) not in sig_eff_mapping:
-            sig_eff_mapping[gen, dope] = []
-        sig_eff_mapping[gen, dope].append(test_sig_effs[i])
-
-    # Calculate mean and std for each configuration
-    sig_eff_stats = {}
-    for key, values in sig_eff_mapping.items():
-        sig_eff_stats[key] = {
-            "mean": np.mean(values),
-            "std": np.std(values),
-            "values": values,
-        }
-    # write stats to text file
-    with open(args.output.parent / f"{args.output.stem}_sig_eff_stats.txt", "w") as f:
-        f.write("Signal efficiency at 99% background rejection:\n")
-        for (gen, dope), stats in sig_eff_stats.items():
-            f.write(f"{gen} {dope}: {stats['mean']:.4f} ± {stats['std']:.4f}\n")
-        f.write("\nSignal efficiency gain relative to herwig 0:\n")
-        herwig_0_mean = sig_eff_stats["herwig", 0]["mean"]
-        for (gen, dope), stats in sig_eff_stats.items():
-            gain = stats["mean"] / herwig_0_mean - 1
-            f.write(f"{gen} {dope}: {gain * 100:.2f} %\n")
-
     # Put it all in one dataframe
     log.info("Combining SIC scores into single dataframe")
     combined = {}
