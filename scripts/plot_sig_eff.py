@@ -1,5 +1,6 @@
 import argparse
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import h5py
@@ -114,6 +115,7 @@ def feature_bin(
     combined_dfs: list[pd.DataFrame],
     features: list[str],
     n_bins: int = 3,
+    quantile_cut: bool = False,
 ) -> tuple[list[pd.DataFrame], dict[str, list[float]]]:
     """Bin the combined dataframe list in a number of equally populated bins.
     Bins are computed based on is_pythia == 1 samples only.
@@ -123,13 +125,21 @@ def feature_bin(
         for df in combined_dfs:
             # Compute bins based only on is_pythia == 1 samples
             pythia_mask = df["is_pythia"] == 1
-            _, bins = pd.qcut(
-                df.loc[pythia_mask, feature],
-                q=n_bins,
-                labels=False,
-                duplicates="drop",
-                retbins=True,
-            )
+            if quantile_cut:
+                _, bins = pd.qcut(
+                    df.loc[pythia_mask, feature],
+                    q=n_bins,
+                    labels=False,
+                    duplicates="drop",
+                    retbins=True,
+                )
+            else:
+                _, bins = pd.cut(
+                    df.loc[pythia_mask, feature],
+                    bins=n_bins,
+                    labels=False,
+                    retbins=True,
+                )
 
             # Apply bins to all samples using pd.cut
             df[f"{feature}_bin"] = pd.cut(
@@ -219,7 +229,6 @@ def main() -> None:
         pd.concat([load_and_cast(pf), load_and_cast(hf)])
         for pf, hf in zip(pythia_files, herwig_files)
     ]
-
     background_rejections = [0.90, 0.95, 0.99]
     log.info(
         f"Calculating the signal efficiencies at {background_rejections} background rejection"
@@ -282,27 +291,26 @@ def main() -> None:
 
     # bin dataframes in 3 equal mjj bins
     log.info("Adding feature bin columns to dataframes")
-    dataframes, bin_centers = feature_bin(
-        dataframes,
-        features=[
-            "mjj",
-            "pt_1",
-            "pt_2",
-            "tau_21_1",
-            "tau_21_2",
-            "tau_32_1",
-            "tau_32_2",
-        ],
-    )
-    plotting_features = [
+    # features_of_interest=[
+    #        "mjj",
+    #        "pt_1",
+    #        "pt_2",
+    #        "tau_21_1",
+    #        "tau_21_2",
+    #        "tau_32_1",
+    #        "tau_32_2",
+    #    ],
+    features_of_interest = [
         "mjj",
         "pt_1",
-        "pt_2",
-        "tau_21_1",
-        "tau_21_2",
-        "tau_32_1",
-        "tau_32_2",
     ]
+    dataframes, bin_centers = feature_bin(
+        dataframes,
+        features=features_of_interest,
+        n_bins=3,
+        quantile_cut=False,
+    )
+    plotting_features = features_of_interest
     log.info("Signal efficiency plotting")
     for feature in plotting_features:
         log.info(f"Plotting {feature}")
@@ -314,6 +322,9 @@ def main() -> None:
             feature=feature,
             output=args.output,
         )
+
+    # write done .txt file
+    Path(args.output).write_text(f"done at on {datetime.now()}\n")
 
 
 if __name__ == "__main__":

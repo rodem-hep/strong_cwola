@@ -85,11 +85,15 @@ def plot_signal_efficiency_gain(
             df = dataframes[i]
             for feat_bin in range(len(bin_centers[feature])):
                 bin_df = df[df[f"{feature}_bin"] == feat_bin]
-                sig_eff = get_signal_efficiency(
-                    bin_df["labels"][bin_df["is_pythia"] == 1],
-                    bin_df["outputs"][bin_df["is_pythia"] == 1],
-                    br,
-                )
+                try:
+                    sig_eff = get_signal_efficiency(
+                        bin_df["labels"][bin_df["is_pythia"] == 1],
+                        bin_df["outputs"][bin_df["is_pythia"] == 1],
+                        br,
+                    )
+                except:
+                    print("sig_eff calculation failed")
+                    breakpoint()
                 if (gen, dope, feat_bin, br) not in sig_eff_by_feat:
                     sig_eff_by_feat[gen, dope, feat_bin, br] = []
                 sig_eff_by_feat[gen, dope, feat_bin, br].append(sig_eff)
@@ -123,7 +127,6 @@ def plot_signal_efficiency_gain(
         "tau_32_1": [r"\tau_{{32}}^{{1}}", ""],
         "tau_32_2": [r"\tau_{{32}}^{{2}}", ""],
     }
-    breakpoint()
     # Increase the font size
     plt.rcParams.update({"font.size": 18})
 
@@ -146,7 +149,8 @@ def plot_signal_efficiency_gain(
         plt.xlabel(
             rf"${feature_name_unit_map[feature][0]}$ {feature_name_unit_map[feature][1]}"
         )
-        plt.ylabel(f"Signal Efficiency at {br * 100}% Background Rejection")
+        plt.title(f"Signal Efficiency at {br * 100}% Background Rejection")
+        plt.ylabel("Signal Efficiency")
         plt.legend()
         plt.grid(True, which="both", ls="--", lw=0.5)
         plt.tight_layout()
@@ -196,7 +200,8 @@ def plot_signal_efficiency_gain(
         plt.xlabel(
             rf"${feature_name_unit_map[feature][0]}$ {feature_name_unit_map[feature][1]}"
         )
-        plt.ylabel(f"Signal Efficiency Gain at {br * 100}% Background Rejection")
+        plt.title(f"Signal Efficiency Gain at {br * 100}% Background Rejection")
+        plt.ylabel("Signal Efficiency Gain")
         plt.legend()
         plt.grid(True, which="both", ls="--", lw=0.5)
         plt.tight_layout()

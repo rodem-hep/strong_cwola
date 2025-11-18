@@ -320,7 +320,7 @@ def main() -> None:
     ratio_axis.grid(True, which="both", linestyle="--", alpha=0.5)
     # Save the figure
     herwig_output = (
-        args.output.parent / f"{args.output.stem}_H_ratio{args.output.suffix}"
+        args.output.parent / f"H_ratio_{args.output.stem}_{args.output.suffix}"
     )
     fig.savefig(herwig_output, bbox_inches="tight")
     plt.close()

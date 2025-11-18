@@ -39,9 +39,10 @@ rule all:
     input:
         expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["", "un_pretrained_"]),
         # expand(data_dir / f"{project_name}/{{mode}}sic.pdf", mode=["un_pretrained_"]),
-        expand(data_dir / f"{project_name}/{{mode}}sig_eff.pdf", mode=["", "un_pretrained_"]),
+        expand(data_dir / f"{project_name}/{{mode}}sig_eff_done.txt", mode=["", "un_pretrained_"]),
         data_dir / f"{project_name}/low_level_data.pdf",
-        data_dir / f"{project_name}/bdt_sic.pdf"
+        data_dir / f"{project_name}/sic_bdt.pdf",
+        #data_dir / f"{project_name}/sig_eff_bdt_done.txt"
 
 rule plot_sig_eff:
     input:
@@ -53,7 +54,7 @@ rule plot_sig_eff:
         ),
         "scripts/plot_sig_eff.py",
     output:
-        data_dir / "{project_name}/{mode}sig_eff.pdf"
+        data_dir / "{project_name}/{mode}sig_eff_done.txt"
     params:
         data_dir = data_dir / f"{project_name}",
         pretrained = lambda w: "" if w.mode == "un_pretrained_" else "--pretrained",
@@ -171,6 +172,24 @@ rule pretrain:
         project_name={wildcards.project_name} \
         """
 
+#rule plot_sig_eff_bdt:
+#    input:
+#        expand(
+#            data_dir / project_name / "bdt_{gen_dope}_seed_{seed}/{file}.h5",
+#            gen_dope=gen_dope,
+#            seed=seeds,
+#            file=["pythia", "herwig"],
+#        ),
+#        "scripts/plot_sig_eff.py",
+#    output:
+#        data_dir / "{project_name}/sig_eff_bdt_done.txt"
+#    params:
+#        data_dir = data_dir / f"{project_name}",
+#    resources:
+#        runtime=5,
+#    shell:
+#        "python scripts/plot_sig_eff.py --data_dir={params.data_dir} --output={output} --is_bdt --pattern=bdt_*"
+
 
 rule plot_sic_bdt:
     input:
@@ -182,7 +201,7 @@ rule plot_sic_bdt:
         ),
         "scripts/plot_sic.py",
     output:
-        data_dir / f"{project_name}/bdt_sic.pdf"
+        data_dir / f"{project_name}/sic_bdt.pdf"
     params:
         data_dir = data_dir / f"{project_name}",
     resources:
