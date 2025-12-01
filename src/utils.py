@@ -93,7 +93,8 @@ def plot_signal_efficiency_gain(
                     )
                 except:
                     print("sig_eff calculation failed")
-                    breakpoint()
+                    print(f"feature: {feature}")
+                    print(f"background rejection: {br}")
                 if (gen, dope, feat_bin, br) not in sig_eff_by_feat:
                     sig_eff_by_feat[gen, dope, feat_bin, br] = []
                 sig_eff_by_feat[gen, dope, feat_bin, br].append(sig_eff)

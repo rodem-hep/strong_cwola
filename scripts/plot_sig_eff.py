@@ -117,7 +117,8 @@ def feature_bin(
     n_bins: int = 3,
     quantile_cut: bool = False,
 ) -> tuple[list[pd.DataFrame], dict[str, list[float]]]:
-    """Bin the combined dataframe list in a number of equally populated bins.
+    """Bin the combined dataframe list in a number of either equally
+    populated or equally spaced bins in a given feature.
     Bins are computed based on is_pythia == 1 samples only.
     """
     centers_dict = {}
@@ -140,6 +141,7 @@ def feature_bin(
                     labels=False,
                     retbins=True,
                 )
+            print(bins)
 
             # Apply bins to all samples using pd.cut
             df[f"{feature}_bin"] = pd.cut(
@@ -303,11 +305,20 @@ def main() -> None:
     features_of_interest = [
         "mjj",
         "pt_1",
+        "pt_2",
+        "tau_21_1",
+        "tau_21_2",
+        "tau_32_1",
+        "tau_32_2",
     ]
+    # features_of_interest = [
+    #    "mjj",
+    #    "pt_1",
+    # ]
     dataframes, bin_centers = feature_bin(
         dataframes,
         features=features_of_interest,
-        n_bins=3,
+        n_bins=5,
         quantile_cut=False,
     )
     plotting_features = features_of_interest
